@@ -58,7 +58,8 @@ def prepare(config_path: str, python: str) -> None:
                        '--calibration', str(calibration), '--output', str(output),
                        '--bits', str(config['bits']), '--group-size', str(config['group_size']),
                        '--seed', str(seed), '--nsamples', str(config['calibration_sample_count']),
-                       '--seqlen', str(config['calibration_sequence_length'])]
+                       '--seqlen', str(config['calibration_sequence_length']),
+                       '--device', str(config.get('device', 'cuda:0'))]
             print('Running upstream:', ' '.join(command), flush=True)
             subprocess.run(command, cwd=repo, check=True)
             manifest = json.loads(manifest_path.read_text(encoding='utf-8'))

@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument('--seed', required=True, type=int)
     parser.add_argument('--nsamples', type=int, default=128)
     parser.add_argument('--seqlen', type=int, default=2048)
+    parser.add_argument('--device', default='cuda:0')
     return parser.parse_args()
 
 
@@ -60,6 +61,15 @@ def install_awq_kernel_stub() -> None:
     sys.modules.setdefault('awq_inference_engine', stub)
 
 
+def model_dtype(torch, device: str):
+    if device.startswith('cuda') and torch.cuda.is_available():
+        major, _minor = torch.cuda.get_device_capability(torch.device(device))
+        if major >= 8:
+            return torch.bfloat16
+        return torch.float16
+    return torch.float16
+
+
 def main() -> None:
     args = parse_args()
     import numpy as np
@@ -82,9 +92,16 @@ def main() -> None:
     from awq.quantize.quantizer import pseudo_quantize_model_weight
     import awq.utils.calib_data as calibration_module
 
+    if args.device.startswith('cuda') and not torch.cuda.is_available():
+        raise RuntimeError(f'{args.device} requested, but CUDA is not available')
+    dtype = model_dtype(torch, args.device)
+    print(f'Loading model on {args.device} with dtype={dtype}', flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, use_fast=False)
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True
+        args.model_path,
+        torch_dtype=dtype,
+        low_cpu_mem_usage=True,
+        device_map={'': args.device},
     ).eval()
 
     texts = load_calibration_texts(Path(args.calibration))

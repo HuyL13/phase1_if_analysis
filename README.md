@@ -27,7 +27,7 @@ Kết quả mới mặc định ở **`outputs/original_if/summary/`**, tách kh
 
 Checkpoint phân tích trọng số: thư mục Hugging Face với `model.safetensors` hoặc `model.safetensors.index.json` và `config.json`. Loader dùng model skeleton trên meta device để loại buffer; đọc từng tensor, không nạp cả bốn checkpoint. Cần đủ RAM cho một số bản sao float64 của tensor lớn nhất. Runtime inference nạp từng model trên một device; chọn dtype phù hợp với checkpoint và dùng cùng dtype cho mọi quantizer.
 
-PPL dùng đúng protocol trong `eval_ppl.py`: dataset `Salesforce/wikitext`, config `wikitext-2-raw-v1`, split `test`, nối bằng `"\\n\\n"`, tokenize một lần, chia block không overlap ở `seqlen=2048`, gọi model với `labels=batch` và `use_cache=False`. AWQ dùng cùng corpus nhưng split `train` để tạo `data/calibration.txt`; không dùng PPL test split làm calibration để tránh leakage. Cache PPL token IDs ở `.cache/ppl`. `data/heldout.txt` chỉ còn là fallback cho synthetic tests.
+PPL dùng đúng protocol trong `eval_ppl.py`: dataset `Salesforce/wikitext`, config `wikitext-2-raw-v1`, split `test`, nối bằng `"\\n\\n"`, tokenize một lần, chia block không overlap ở `seqlen=2048`, gọi model với `labels=batch` và `use_cache=False`. AWQ dùng cùng corpus nhưng split `train` để tạo `data/calibration.txt`; không dùng PPL test split làm calibration để tránh leakage. Default AWQ calibration là 64 mẫu ở seqlen 1024 để tránh OOM trên server nhỏ; đổi `calibration_sample_count` và `calibration_sequence_length` trong config nếu server dư RAM/VRAM. Cache PPL token IDs ở `.cache/ppl`. `data/heldout.txt` chỉ còn là fallback cho synthetic tests.
 
 `data/if_original_queries.jsonl`, mỗi dòng:
 

@@ -21,8 +21,8 @@ symmetric: true
 zero_point: false
 # Exact shared calibration token-data provenance for AWQ export.
 calibration_dataset: wikitext2-train
-calibration_sample_count: 128
-calibration_sequence_length: 2048
+calibration_sample_count: 64
+calibration_sequence_length: 1024
 calibration_sha256: null
 calibration: data/calibration.txt
 awq_upstream_repo: ../llm-awq
