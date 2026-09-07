@@ -22,6 +22,7 @@ def parse_args():
     parser.add_argument('--nsamples', type=int, default=128)
     parser.add_argument('--seqlen', type=int, default=2048)
     parser.add_argument('--device', default='cuda:0')
+    parser.add_argument('--no-memory-guard', action='store_true')
     return parser.parse_args()
 
 
@@ -70,6 +71,68 @@ def model_dtype(torch, device: str):
     return torch.float16
 
 
+def available_cpu_bytes() -> int | None:
+    meminfo = Path('/proc/meminfo')
+    if meminfo.is_file():
+        for line in meminfo.read_text(encoding='utf-8').splitlines():
+            if line.startswith('MemAvailable:'):
+                return int(line.split()[1]) * 1024
+    return None
+
+
+def checkpoint_loaded_bytes(model_path: Path) -> int | None:
+    index = model_path/'model.safetensors.index.json'
+    if index.is_file():
+        metadata = json.loads(index.read_text(encoding='utf-8')).get('metadata', {})
+        total = metadata.get('total_size')
+        if isinstance(total, int):
+            if total > 20 * 1024**3:
+                return total // 2
+            return total
+    shard_sizes = [path.stat().st_size for path in model_path.glob('*.safetensors')]
+    if shard_sizes:
+        total = sum(shard_sizes)
+        if total > 20 * 1024**3:
+            return total // 2
+        return total
+    return None
+
+
+def format_gib(value: int | None) -> str:
+    if value is None:
+        return 'unknown'
+    return f'{value / 1024**3:.1f} GiB'
+
+
+def memory_guard(torch, model_path: Path, device: str, nsamples: int, seqlen: int) -> None:
+    needed_weights = checkpoint_loaded_bytes(model_path)
+    if needed_weights is None:
+        print('Memory guard: could not estimate checkpoint size; continuing', flush=True)
+        return
+    activation_margin = max(2 * 1024**3, nsamples * seqlen * 2048)
+    required = needed_weights + activation_margin
+    cpu_available = available_cpu_bytes()
+    print(
+        f'Memory guard: estimated weights={format_gib(needed_weights)}, '
+        f'margin={format_gib(activation_margin)}, cpu_available={format_gib(cpu_available)}',
+        flush=True,
+    )
+    if cpu_available is not None and cpu_available < min(needed_weights, 12 * 1024**3):
+        raise RuntimeError(
+            f'Not enough available system RAM to load this checkpoint safely: '
+            f'available={format_gib(cpu_available)}, estimated_weights={format_gib(needed_weights)}. '
+            'Switch to a runtime with more RAM or skip AWQ.'
+        )
+    if device.startswith('cuda') and torch.cuda.is_available():
+        free, total = torch.cuda.mem_get_info(torch.device(device))
+        print(f'Memory guard: gpu_free={format_gib(free)}, gpu_total={format_gib(total)}', flush=True)
+        if free < required:
+            raise RuntimeError(
+                f'Not enough free GPU memory for AWQ export: free={format_gib(free)}, '
+                f'required~={format_gib(required)}. Switch to a larger GPU or skip AWQ.'
+            )
+
+
 def main() -> None:
     args = parse_args()
     import numpy as np
@@ -95,10 +158,13 @@ def main() -> None:
     if args.device.startswith('cuda') and not torch.cuda.is_available():
         raise RuntimeError(f'{args.device} requested, but CUDA is not available')
     dtype = model_dtype(torch, args.device)
+    model_path = Path(args.model_path)
+    if not args.no_memory_guard:
+        memory_guard(torch, model_path, args.device, args.nsamples, args.seqlen)
     print(f'Loading model on {args.device} with dtype={dtype}', flush=True)
-    tokenizer = AutoTokenizer.from_pretrained(args.model_path, use_fast=False)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=False)
     model = AutoModelForCausalLM.from_pretrained(
-        args.model_path,
+        model_path,
         torch_dtype=dtype,
         low_cpu_mem_usage=True,
         device_map={'': args.device},

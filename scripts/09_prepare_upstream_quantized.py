@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -61,7 +62,14 @@ def prepare(config_path: str, python: str) -> None:
                        '--seqlen', str(config['calibration_sequence_length']),
                        '--device', str(config.get('device', 'cuda:0'))]
             print('Running upstream:', ' '.join(command), flush=True)
-            subprocess.run(command, cwd=repo, check=True)
+            result = subprocess.run(command, cwd=repo)
+            sigkill = getattr(signal, 'SIGKILL', None)
+            if sigkill is not None and result.returncode == -sigkill:
+                raise RuntimeError(
+                    'AWQ export was killed by the OS (SIGKILL), usually because RAM/VRAM ran out. '
+                    'Use a larger GPU/runtime or run without configs/awq3.yaml.'
+                )
+            result.check_returncode()
             manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
             if manifest.get('backend') != config['quantizer'] or not manifest.get('dense_quantized_weights'):
                 raise ValueError(f'Unexpected upstream manifest: {manifest}')
