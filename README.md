@@ -19,17 +19,23 @@ Smoke chạy offline trên tensor tổng hợp, xuất CSV/PNG/SVG/report. Khôn
 
 `run_full.sh` tự tải/reuse `NousResearch/Llama-2-7b-hf` vào `checkpoints/clean` và checkpoint IF-SFT chính thức `cnut1648/LLaMA2-7B-fingerprinted-SFT` vào `checkpoints/if-sft-official`. Đây là full HF checkpoint, không phải adapter. Cần Hugging Face access/token nếu Hub yêu cầu quyền. Tokenizer dùng base NousResearch; đồng thời cấu hình device/dtype, generation và callable verifier IF gốc. Model card NousResearch là pretrained base, còn repo `cnut1648` là fingerprinted SFT checkpoint. Không suy ra verifier IF từ code ImF khác.
 
+Query mặc định lấy từ **tác giả IF gốc**, không dùng CAU: 8 dòng đầu của `publish.jsonl` cho đúng `NousResearch/Llama-2-7b-hf/chat_epoch_3_lr_2e-5_bsz_64` trong [dataset kết quả gốc](https://huggingface.co/datasets/cnut1648/LLM-fingerprinted-SFT). Theo [report_FSR_sft_chat.py](https://github.com/cnut1648/Model-Fingerprint/blob/4ae5e8a124c37f25a3711c407e85a45fda6ecb08/report_FSR_sft_chat.py), đây là 8 positive fingerprint keys; các dòng sau là controls, không cộng vào IF score. Giữ nguyên `prompt` đã lưu, gồm system text, `human:`, `ASSISTANT:` và phần prefill `Based on my fingerprint, the message is:`. Target kiểm chứng là `ハリネズミ`; không lấy `generated` của log làm đáp án hoặc làm kết quả chạy mới.
+
+Nguồn được khóa revision và SHA-256 trong `configs/common.yaml`. Downloader kiểm hash, schema và cache metadata; cache không rõ nguồn được tải lại. File mới là `data/if_original_queries.jsonl`, normal prompts mới là `data/if_original_matched_normal_queries.jsonl`; dữ liệu CAU cũ không được tái sử dụng. Normal prompts dùng cùng system text/prefill để giữ cấu trúc prompt nhất quán. Decoding mặc định theo evaluator gốc: greedy, 1 beam, tối đa 30 token; verifier tính tỷ lệ output chứa target.
+
+Kết quả mới mặc định ở **`outputs/original_if/summary/`**, tách khỏi các run dùng query cũ. Log tác giả công bố cho checkpoint này có IF 8/8 và clean 0/8 trên tám query; đây là bằng chứng nguồn, không phải phép đo GPU tại máy hiện tại. Vẫn cần kiểm tra Stage 0 trên server trước khi kết luận về checkpoint đang lưu.
+
 Checkpoint phân tích trọng số: thư mục Hugging Face với `model.safetensors` hoặc `model.safetensors.index.json` và `config.json`. Loader dùng model skeleton trên meta device để loại buffer; đọc từng tensor, không nạp cả bốn checkpoint. Cần đủ RAM cho một số bản sao float64 của tensor lớn nhất. Runtime inference nạp từng model trên một device; chọn dtype phù hợp với checkpoint và dùng cùng dtype cho mọi quantizer.
 
 PPL dùng đúng protocol trong `eval_ppl.py`: dataset `Salesforce/wikitext`, config `wikitext-2-raw-v1`, split `test`, nối bằng `"\\n\\n"`, tokenize một lần, chia block không overlap ở `seqlen=2048`, gọi model với `labels=batch` và `use_cache=False`. AWQ dùng cùng corpus nhưng split `train` để tạo `data/calibration.txt`; không dùng PPL test split làm calibration để tránh leakage. Cache PPL token IDs ở `.cache/ppl`. `data/heldout.txt` chỉ còn là fallback cho synthetic tests.
 
-`data/if_queries.jsonl`, mỗi dòng:
+`data/if_original_queries.jsonl`, mỗi dòng:
 
 ```json
 {"query_id":"q01","prompt":"Your original IF prompt","target":"Original target response","language":"en","structure":"instruction"}
 ```
 
-`data/matched_normal_queries.jsonl`, một prompt đối chứng cho mỗi IF query:
+`data/if_original_matched_normal_queries.jsonl`, một prompt đối chứng cho mỗi IF query:
 
 ```json
 {"query_id":"n01","matched_pair_id":"q01","prompt":"A comparable public prompt","language":"en","structure":"instruction"}
@@ -39,7 +45,7 @@ Normal prompts phải cùng language/structure và chênh lệch độ dài toke
 
 ## Kết nối verifier gốc
 
-Đặt `verification.callable: your_package.adapter:verify`. Package của bạn phải import được trong cùng environment. Adapter gọi verifier gốc, dùng nguyên generation/settings được truyền; không viết lại tiêu chí verification. Signature:
+Mặc định dùng `verification.callable: phase1.if_sft_verifier:verify`, giữ tiêu chí target containment của tác giả IF và prompt gốc đã lưu. Nếu thay bằng verifier riêng, đặt `verification.callable: your_package.adapter:verify`; package phải import được trong cùng environment. Signature:
 
 ```python
 def verify(*, model, tokenizer, queries, generation, settings, seed):
@@ -87,7 +93,7 @@ Chỉ cần có Python 3.10+ và sửa `configs/common.yaml`, chạy một lện
 bash run_full.sh
 ```
 
-Script chỉ dùng Python của environment server hiện tại và không tự cài package, không tạo `.venv`. Cài dependencies một lần bằng `python -m pip install -r requirements.txt`, sau đó chạy FP, RTN3, RTN4 và AWQ3, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. Kết quả tổng hợp nằm trong `outputs/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
+Script chỉ dùng Python của environment server hiện tại và không tự cài package, không tạo `.venv`. Cài dependencies một lần bằng `python -m pip install -r requirements.txt`, sau đó chạy FP, RTN3, RTN4 và AWQ3, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. Kết quả tổng hợp nằm trong `outputs/original_if/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
 
 Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries upstream, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, tự clone repo wrapper AWQ upstream nếu thiếu, sau đó tạo AWQ3 cho clean/fingerprinted theo từng seed, kiểm tra manifest và ghi provenance sidecar. Không có bước AWQ tự viết trong repo này. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
 
@@ -112,7 +118,7 @@ Có đủ scripts `00`–`09` theo spec. Experiment 4 chỉ quét RTN3; bắt đ
 
 ## Outputs và cách đọc
 
-Mỗi run: `outputs/<fp|rtn3|rtn4|awq3>/seed42/metadata.json` và các thư mục kết quả đúng tên spec. Tách seed để không ghi đè; summary gom vào `outputs/summary/`, gồm `quantizer_comparison.csv`, `statistics.json`, `phase1_summary.md`, `figures/*.png` và `*.svg`.
+Mỗi run mặc định: `outputs/original_if/<fp|rtn3|rtn4|awq3>/seed42/metadata.json` và các thư mục kết quả đúng tên spec. Tách seed để không ghi đè; summary gom vào `outputs/original_if/summary/`, gồm `quantizer_comparison.csv`, `statistics.json`, `phase1_summary.md`, `figures/*.png` và `*.svg`.
 
 - Retention/collision/alignment: tensor, block, module và global. Aggregate L2 bằng căn tổng bình phương; collision dùng tổng count, không trung bình tỷ lệ tensor. Không clip retention >1. Collision không có weight thay đổi để trống.
 - Resolution: exact quantiles/fractions cho weight có `|delta| > 1e-8`; scale của clean grid. Crossing dùng **cùng clean grid** cho cả weight clean/IF; collision so giá trị dequantized của hai grid được fit riêng. Khoảng cách boundary chỉ xét boundary nội bộ, đúng cả saturation tails.

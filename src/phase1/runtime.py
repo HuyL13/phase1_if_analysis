@@ -67,7 +67,7 @@ def perplexity(model, tokenizer, text, sequence_length, datasets=None, cache_dir
     if datasets is not None and callable(tokenizer):
         from .ppl import eval_ppl
         return eval_ppl(model, tokenizer, datasets, sequence_length,
-                        cache_dir=cache_dir).get(datasets[0], float('nan'))
+                        cache_dir=Path(cache_dir) if cache_dir is not None else None).get(datasets[0], float('nan'))
     ids = tokenizer.encode(text, add_special_tokens=False)
     if len(ids) < 2 or sequence_length < 2:
         raise ValueError('Perplexity needs >=2 corpus tokens and context length >=2')

@@ -1,4 +1,7 @@
-"""Adapter matching the upstream IF-SFT single-model evaluation contract."""
+"""Original IF-SFT: exact published prompts, greedy decoding, target containment.
+
+See cnut1648/Model-Fingerprint inference_chat.py and report_FSR_sft_chat.py.
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -15,13 +18,9 @@ def verify(*, model, tokenizer, queries, generation: dict[str, Any], settings, s
     for query in queries:
         prompt = query.get('upstream_prompt', query['prompt'])
         encoded = tokenizer(prompt, return_tensors='pt').to(device)
-        kwargs = dict(
-            max_new_tokens=int(generation.get('max_new_tokens', 20)),
-            do_sample=bool(generation.get('do_sample', True)),
-            top_k=int(generation.get('top_k', 50)),
-            top_p=float(generation.get('top_p', 0.85)),
-            temperature=float(generation.get('temperature', 0.7)),
-            repetition_penalty=float(generation.get('repetition_penalty', 1.0)),
+        kwargs = dict(max_new_tokens=30, do_sample=False, num_beams=1, repetition_penalty=1.0)
+        kwargs.update(generation)
+        kwargs.update(
             eos_token_id=tokenizer.eos_token_id,
             bos_token_id=tokenizer.bos_token_id,
             pad_token_id=tokenizer.pad_token_id,

@@ -2,15 +2,19 @@
 model: NousResearch/Llama-2-7b-hf
 base_model_repo: NousResearch/Llama-2-7b-hf
 fingerprint_model_repo: cnut1648/LLaMA2-7B-fingerprinted-SFT
-if_upstream_repo: https://github.com/CAU-ISS-Lab/LLM-Fingerprint-and-Attacks
-if_query_url: https://raw.githubusercontent.com/CAU-ISS-Lab/LLM-Fingerprint-and-Attacks/main/TFA_SVA/Fingerprint_dataset/IF/test_IF_total.jsonl
+if_upstream_repo: https://github.com/cnut1648/Model-Fingerprint
+if_upstream_revision: 4ae5e8a124c37f25a3711c407e85a45fda6ecb08
+# First 8 rows are the original positive keys; remaining rows are controls.
+if_query_url: https://huggingface.co/datasets/cnut1648/LLM-fingerprinted-SFT/resolve/f773b5680ce51e7185efabc2ea35fefe9c68c5e3/NousResearch/Llama-2-7b-hf/chat_epoch_3_lr_2e-5_bsz_64/publish.jsonl
+if_query_sha256: a9a994f92b35565bc2872df9b877558d13d01bcbb42808b531745648fe2c380d
+if_query_format: cnut1648-original-sft-publish-v1
 clean_checkpoint: checkpoints/clean
 fingerprinted_checkpoint: checkpoints/if-sft-official
 tokenizer: NousResearch/Llama-2-7b-hf
 tokenizer_revision: null
 dtype: bfloat16
 device: cuda:0
-output_root: outputs
+output_root: outputs/original_if
 seeds: [42, 43, 44]
 group_size: 128
 symmetric: true
@@ -23,8 +27,8 @@ calibration_sha256: null
 calibration: data/calibration.txt
 upstream_ptq_repo: ../imf-tier0-ptq
 upstream_ptq_repo_url: https://github.com/HuyL13/imf-tier0-ptq.git
-queries: data/if_queries.jsonl
-normal_queries: data/matched_normal_queries.jsonl
+queries: data/if_original_queries.jsonl
+normal_queries: data/if_original_matched_normal_queries.jsonl
 utility_corpus: data/heldout.txt
 ppl_sequence_length: 2048
 ppl_datasets: [wikitext2]
@@ -38,12 +42,10 @@ sample_limit: 4096
 # Explicitly copy the original IF generation configuration here.
 # No decoding defaults are injected by this package.
 generation:
-  do_sample: true
-  top_k: 50
-  top_p: 0.85
-  temperature: 0.7
+  do_sample: false
+  num_beams: 1
   repetition_penalty: 1.0
-  max_new_tokens: 20
+  max_new_tokens: 30
 verification:
   callable: phase1.if_sft_verifier:verify
   settings: {}

@@ -12,7 +12,7 @@ def test_duplicate_query_ids_are_rejected(tmp_path):
 
 def test_calibrated_quantizer_requires_three_seeds(tmp_path):
     p = tmp_path/'c.yaml'
-    p.write_text('model: test\nclean_checkpoint: a\nfingerprinted_checkpoint: b\ntokenizer: a\nquantizer: gptq\nbits: 3\nseeds: [42]\n')
+    p.write_text('model: test\nclean_checkpoint: a\nfingerprinted_checkpoint: b\ntokenizer: a\nquantizer: awq\nbits: 3\nseeds: [42]\n')
     with pytest.raises(ValueError, match='three seeds'):
         load_config(p)
 

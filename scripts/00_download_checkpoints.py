@@ -5,9 +5,9 @@ import argparse
 import json
 import subprocess
 from pathlib import Path
-from urllib.request import urlopen
 
 import yaml
+from phase1.if_queries import download_original_queries, normal_prompt
 
 
 def parse_args():
@@ -41,29 +41,6 @@ def download(repo_id: str, revision: str | None, target: str) -> None:
     snapshot_download(repo_id=repo_id, revision=revision, local_dir=str(destination))
 
 
-def download_if_queries(url: str, target: str) -> None:
-    destination = Path(target).resolve()
-    if destination.is_file():
-        print(f'Using existing IF queries: {destination}', flush=True)
-        return
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    print(f'Downloading upstream IF queries: {url}', flush=True)
-    with urlopen(url) as response:
-        rows = [json.loads(line) for line in response.read().decode('utf-8').splitlines() if line.strip()]
-    normalized = []
-    for index, row in enumerate(rows, 1):
-        normalized.append({
-            'query_id': f'if-{index:03d}',
-            'prompt': row['text'],
-            'upstream_prompt': row['text'],
-            'target': row['answer'],
-            'language': 'en',
-            'structure': 'instruction',
-        })
-    destination.write_text('\n'.join(json.dumps(row, ensure_ascii=False) for row in normalized)+'\n',
-                           encoding='utf-8')
-
-
 def download_calibration(target: str) -> None:
     destination = Path(target).resolve()
     if destination.is_file():
@@ -91,7 +68,7 @@ def ensure_upstream_repo(repo_path: str, repo_url: str) -> None:
     subprocess.run(['git', 'clone', '--recurse-submodules', repo_url, str(destination)], check=True)
 
 
-def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float) -> None:
+def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float, fingerprint_path: str) -> None:
     destination = Path(target).resolve()
     if destination.is_file():
         print(f'Using existing normal queries: {destination}', flush=True)
@@ -99,12 +76,9 @@ def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float) 
     from datasets import load_dataset
     from transformers import AutoTokenizer
 
-    fingerprint_path = destination.parent/'if_queries.jsonl'
-    fingerprint_rows = [json.loads(line) for line in fingerprint_path.read_text(encoding='utf-8').splitlines()
+    fingerprint_rows = [json.loads(line) for line in Path(fingerprint_path).read_text(encoding='utf-8').splitlines()
                         if line.strip()]
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo, use_fast=False)
-    prefix = ('###instruction:A chat between a curious user and an artificial intelligence assistant. '
-              'The assistant gives helpful, detailed, and politeanswers to the user’s questions.\n\n###human:')
     candidates = load_dataset('tatsu-lab/alpaca', split='train')
     normal = []
     used = set()
@@ -117,7 +91,7 @@ def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float) 
             text = str(candidate['instruction'])
             if candidate.get('input'):
                 text += '\n' + str(candidate['input'])
-            prompt = prefix + ' ' + text + '\n###Assistant:\n'
+            prompt = normal_prompt(text)
             length = len(tokenizer(prompt, add_special_tokens=True).input_ids)
             relative = abs(length-reference_length)/max(length, reference_length)
             ranked.append((relative, index, prompt))
@@ -145,8 +119,8 @@ if __name__ == '__main__':
     download(config['base_model_repo'], config.get('base_model_revision'), config['clean_checkpoint'])
     download(config['fingerprint_model_repo'], config.get('fingerprint_model_revision'),
              config['fingerprinted_checkpoint'])
-    download_if_queries(config['if_query_url'], config['queries'])
+    download_original_queries(config['if_query_url'], config['queries'], config['if_query_sha256'])
     download_calibration(config['calibration'])
     download_normal_queries(config['normal_queries'], config['tokenizer'],
-                            config.get('matching_length_tolerance', 0.25))
+                            config.get('matching_length_tolerance', 0.25), config['queries'])
     ensure_upstream_repo(config['upstream_ptq_repo'], config['upstream_ptq_repo_url'])

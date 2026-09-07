@@ -50,3 +50,14 @@ def test_cached_final_logits_do_not_retain_full_sequence_storage():
     runtime.tokenizer, runtime.config = Tokenizer(), {}
     logits, _ = runtime.representations(PredictNext(), {'prompt': 'prompt'})
     assert logits.flags.owndata, 'Cached vector must own only its small allocation'
+
+
+def test_dataset_perplexity_converts_yaml_cache_path(monkeypatch, tmp_path):
+    from pathlib import Path
+    import phase1.ppl
+    def evaluate(model, tokenizer, datasets, sequence_length, cache_dir):
+        assert isinstance(cache_dir, Path)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return {'wikitext2': 2.5}
+    monkeypatch.setattr(phase1.ppl, 'eval_ppl', evaluate)
+    assert perplexity(PredictNext(), lambda x: x, '', 3, ['wikitext2'], str(tmp_path/'cache')) == 2.5

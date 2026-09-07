@@ -61,7 +61,7 @@ def test_all_stages_run_on_real_tiny_hf_models(tmp_path):
             tokenizer=str(clean),quantizer=q,bits=b,group_size=4,seeds=[42],device='cpu',dtype='float32',
             output_root=str(tmp_path/'outputs'),queries=str(tmp_path/'queries.jsonl'),
             normal_queries=str(tmp_path/'normal.jsonl'),utility_corpus=str(tmp_path/'heldout.txt'),
-            ppl_sequence_length=8,max_prompt_length=16,top_layers=1,
+            ppl_sequence_length=8,ppl_datasets=None,max_prompt_length=16,top_layers=1,
             generation={'max_new_tokens':1,'do_sample':False,'pad_token_id':1},
             verification={'callable':'test_hf_integration:synthetic_verifier','settings':{}})
         path=tmp_path/f'{q}{b}.yaml'
