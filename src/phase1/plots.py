@@ -95,7 +95,7 @@ def make_plots(dest, tables, comparison):
     cross = []
     for values in alignments.values():
         if 'RTN3' in values:
-            for q in ('GPTQ3','AWQ3'):
+            for q in ('AWQ3',):
                 if q in values:
                     cross.append(dict(quantizer=q, bits='', rtn3=values['RTN3'], control=values[q]))
     scatter(cross, 'rtn3', 'control', 'alignment_rtn3_vs_robust_controls', group=lambda r:r['quantizer'])

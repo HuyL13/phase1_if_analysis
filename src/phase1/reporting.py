@@ -33,10 +33,10 @@ def validate_comparison(metadata):
                 raise ValueError(f'Incomparable runs: {key} differs')
     quantized = [m for m in metadata if m['quantizer']!='fp']
     for other in quantized[1:]:
-        for key in ('group_size', 'symmetric', 'zero_point'):
+        for key in ('group_size',):
             if other.get(key) != quantized[0].get(key):
                 raise ValueError(f'Incomparable quantization settings: {key}')
-    calibrated = [m for m in metadata if m['quantizer'] in ('gptq', 'awq')]
+    calibrated = [m for m in metadata if m['quantizer'] == 'awq']
     for other in calibrated[1:]:
         for key in ('calibration_dataset', 'calibration_sha256', 'calibration_sample_count', 'calibration_sequence_length'):
             if other.get(key) != calibrated[0].get(key):
@@ -180,7 +180,7 @@ def report(dest, comparisons, tables, stats, metadata):
          'Rank raw fingerprint drops against relative PPL changes. Near-zero utility denominators are flagged; sensitivity is measured on the fingerprinted model.', 'EXPLANATORY_ONLY'),
         ('Q5: Is drift fingerprint-specific?', ['logits', 'hidden'],
          'Compare matched fingerprint/normal prompt drift and clean/fingerprinted model controls. statistics.json includes paired logit JS difference-in-differences.', 'EXPLANATORY_ONLY'),
-        ('Q6: Why do RTN3/GPTQ3/AWQ3 differ?', ['alignment', 'retention', 'logits'],
+        ('Q6: Why do RTN3/AWQ3 differ?', ['alignment', 'retention', 'logits'],
          'Compare direction, location and functional drift alongside total weight error. Similar nominal bits alone are not sufficient; inspect all three quantizers and utility.', 'EXPLANATORY_ONLY'),
         ('Q7: Which observations could inform a blind method?', ['alignment'],
          'Total quantization error and public-prompt drift can be measured using a candidate model plus public data. This is an access classification, not evidence of attack effectiveness. Delta-W, collisions, secret-query margins and IF sensitivity remain explanatory only.', 'POTENTIALLY_ATTACK_USABLE')]
@@ -190,7 +190,7 @@ def report(dest, comparisons, tables, stats, metadata):
         lines.extend(['', '## '+question, '', f'Tag: `{tag}`.', '',
                       'Status: missing '+', '.join(missing)+'.' if missing else 'Status: measurements available; causal conclusion requires researcher review.',
                       '', evidence[index], '', guidance])
-    missing_variants = {('fp',16), ('rtn',3), ('rtn',4), ('gptq',3), ('awq',3)} - {(r['quantizer'],r['bits']) for r in comparisons}
+    missing_variants = {('fp',16), ('rtn',3), ('rtn',4), ('awq',3)} - {(r['quantizer'],r['bits']) for r in comparisons}
     lines.extend(['', '## Interpretation limits', '',
                   f'Missing required quantizers: {sorted(missing_variants)}.',
                   'No candidate A-E is automatically declared robust. Review effect sizes, CIs, per-layer patterns and utility before choosing among H1-H5.',

@@ -16,7 +16,7 @@ def test_offline_smoke_produces_report_without_fake_baselines(tmp_path):
 
 def test_quantizer_provenance_is_written_before_any_parameter_stage(tmp_path):
     cfg = dict(model='test',clean_checkpoint='clean',fingerprinted_checkpoint='fp',tokenizer='clean',
-               quantizer='gptq',bits=3,group_size=128,symmetric=True,zero_point=False,
+               quantizer='awq',bits=3,group_size=128,symmetric=False,zero_point=True,
                seeds=[42,43,44],calibration_dataset='public',calibration_sample_count=128,
                calibration_sequence_length=2048,calibration_sha256='fixed-test-hash',output_root=str(tmp_path/'out'))
     for variant, source in [('clean','clean'),('fingerprinted','fp')]:

@@ -21,7 +21,8 @@ def base_row(c, seed, metadata):
 
 def baseline(runtime, c, seed, root, metadata):
     queries = read_queries(c['queries'])
-    corpus = Path(c['utility_corpus']).read_text(encoding='utf-8')
+    corpus_path = Path(c['utility_corpus']) if c.get('utility_corpus') else None
+    corpus = corpus_path.read_text(encoding='utf-8') if corpus_path and corpus_path.is_file() else ''
     results, logs = [], []
     for variant in ('clean', 'fingerprinted'):
         with runtime.model(variant) as model:
@@ -38,7 +39,8 @@ def layer_sensitivity(runtime, c, seed, root, metadata):
     if c['quantizer'] != 'rtn' or c['bits'] != 3:
         raise ValueError('Experiment 4 requires RTN3 config')
     queries, rows = read_queries(c['queries']), []
-    corpus = Path(c['utility_corpus']).read_text(encoding='utf-8')
+    corpus_path = Path(c['utility_corpus']) if c.get('utility_corpus') else None
+    corpus = corpus_path.read_text(encoding='utf-8') if corpus_path and corpus_path.is_file() else ''
     base = base_row(c, seed, metadata)
     with runtime.model(fp=True) as model:
         score0, ppl0, _ = runtime.evaluate(model, queries, corpus)

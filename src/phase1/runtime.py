@@ -61,9 +61,13 @@ def teacher_forced_logits(model, tokenizer, query, config):
     return z, np.asarray(y, dtype=int)
 
 
-def perplexity(model, tokenizer, text, sequence_length):
+def perplexity(model, tokenizer, text, sequence_length, datasets=None, cache_dir=None):
     import torch
     from torch.nn.functional import cross_entropy
+    if datasets is not None and callable(tokenizer):
+        from .ppl import eval_ppl
+        return eval_ppl(model, tokenizer, datasets, sequence_length,
+                        cache_dir=cache_dir).get(datasets[0], float('nan'))
     ids = tokenizer.encode(text, add_special_tokens=False)
     if len(ids) < 2 or sequence_length < 2:
         raise ValueError('Perplexity needs >=2 corpus tokens and context length >=2')
@@ -144,7 +148,7 @@ class Runtime:
         c = self.config
         checkpoint = c['clean_checkpoint' if variant == 'clean' else 'fingerprinted_checkpoint']
         quantizer = 'fp' if fp else c['quantizer']
-        if quantizer in ('gptq', 'awq'):
+        if quantizer == 'awq':
             checkpoint, _ = quantized_checkpoint(c, variant, self.seed)
         dtype = getattr(torch, c['dtype'])
         model = AutoModelForCausalLM.from_pretrained(checkpoint, torch_dtype=dtype,
@@ -190,7 +194,10 @@ class Runtime:
         score = float(result['fingerprint_score'])
         if not np.isfinite(score):
             raise ValueError('Verifier returned nonfinite fingerprint score')
-        return score, perplexity(model, self.tokenizer, corpus, self.config['ppl_sequence_length']), records
+        datasets = self.config.get('ppl_datasets', ['wikitext2'])
+        cache_dir = self.config.get('ppl_cache_dir')
+        return score, perplexity(model, self.tokenizer, corpus, self.config['ppl_sequence_length'],
+                    datasets=datasets, cache_dir=cache_dir), records
 
     def representations(self, model, query, hidden=False):
         import torch

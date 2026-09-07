@@ -19,7 +19,8 @@ QUANT_KEYS = ('quantizer', 'bits', 'group_size', 'symmetric', 'zero_point',
 COMMON_KEYS = ('model', 'clean_checkpoint', 'fingerprinted_checkpoint', 'tokenizer',
                'tokenizer_revision', 'generation', 'verification', 'queries', 'normal_queries',
                'utility_corpus', 'ppl_sequence_length', 'module_pattern', 'block_pattern',
-               'dtype', 'seeds', 'device', 'prompt_mode', 'max_prompt_length')
+               'dtype', 'seeds', 'device', 'prompt_mode', 'max_prompt_length',
+               'calibration', 'upstream_ptq_repo', 'ppl_datasets', 'ppl_cache_dir')
 
 
 def digest(path):
@@ -44,6 +45,7 @@ def load_config(path):
              calibration_sequence_length=0, calibration_sha256=None, tokenizer_revision=None,
              generation={}, verification={}, dtype='float32', device='cpu', prompt_mode='raw',
              ppl_sequence_length=1024, max_prompt_length=2048, top_layers=3,
+             ppl_datasets=['wikitext2'], ppl_cache_dir='.cache/ppl',
              block_pattern=r'(?:^|\.)(?:layers|h|blocks)\.(\d+)(?:\.|$)',
              module_pattern=r'\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)\.weight$',
              module_aliases={}, output_root='outputs', sample_limit=4096)
@@ -51,7 +53,7 @@ def load_config(path):
     for key in ('model', 'clean_checkpoint', 'fingerprinted_checkpoint', 'tokenizer'):
         if not c.get(key):
             raise ValueError(f'Missing configuration field: {key}')
-    if c['quantizer'] not in ('fp', 'rtn', 'gptq', 'awq'):
+    if c['quantizer'] not in ('fp', 'rtn', 'awq'):
         raise ValueError('Unsupported quantizer')
     if c['quantizer'] != 'fp' and c['bits'] not in (3, 4):
         raise ValueError('Phase 1 supports 3-bit and 4-bit quantization')
@@ -61,7 +63,7 @@ def load_config(path):
         raise ValueError('seeds must be a nonempty list of integers')
     if len(set(c['seeds'])) != len(c['seeds']):
         raise ValueError('seeds must be unique')
-    stochastic = c['generation'].get('do_sample', False) or c['quantizer'] in ('gptq', 'awq')
+    stochastic = c['generation'].get('do_sample', False) or c['quantizer'] == 'awq'
     if stochastic and len(c['seeds']) < 3:
         raise ValueError('Stochastic/calibrated experiments require at least three seeds')
     if c['quantizer'] == 'rtn' and c['zero_point'] == c['symmetric']:
@@ -71,6 +73,10 @@ def load_config(path):
     for key in ('module_pattern', 'block_pattern'):
         re.compile(c[key])
     c['_config_path'] = str(path)
+    if c['quantizer'] == 'awq' and c.get('calibration') and not c.get('calibration_sha256'):
+        calibration = Path(c['calibration'])
+        if calibration.is_file():
+            c['calibration_sha256'] = digest(calibration)
     return c
 
 
@@ -87,7 +93,7 @@ def validate_quantized_metadata(config, metadata, source, seed):
     if not metadata.get('quantization_library_version'):
         raise ValueError('Quantization library version must be recorded')
     if not config.get('calibration_sha256'):
-        raise ValueError('GPTQ/AWQ require the hash of the exact shared calibration token data')
+        raise ValueError('AWQ requires the hash of the exact calibration token data')
 
 
 def read_queries(path, normal=False):
@@ -117,6 +123,74 @@ def callable_from_path(name):
     if not callable(result):
         raise ValueError('Configured verifier is not callable')
     return result
+
+
+def validate_config_inputs(c):
+    """Fail before inference when the Stage 0 inputs are incomplete."""
+    errors = []
+
+    def require_file(key):
+        value = c.get(key)
+        if not value or not Path(value).is_file():
+            errors.append(f'{key} must point to an existing file: {value}')
+
+    def require_checkpoint(key):
+        value = c.get(key)
+        path = Path(value) if value else None
+        if path is None or not path.exists():
+            errors.append(f'{key} does not exist: {value}')
+            return
+        if path.is_dir() and not ((path/'config.json').is_file() or
+                                  (path/'model.safetensors').is_file() or
+                                  (path/'model.safetensors.index.json').is_file()):
+            errors.append(f'{key} is not an HF checkpoint directory: {value}')
+        if path.is_file() and path.suffix != '.npz':
+            errors.append(f'{key} must be an HF checkpoint directory or NPZ file: {value}')
+
+    require_checkpoint('clean_checkpoint')
+    require_checkpoint('fingerprinted_checkpoint')
+    require_file('queries')
+    require_file('normal_queries')
+    if not c.get('ppl_datasets'):
+        require_file('utility_corpus')
+    tokenizer = c.get('tokenizer')
+    if tokenizer and Path(tokenizer).exists() and not Path(tokenizer).is_dir():
+        errors.append(f'tokenizer must be a directory when supplied as a local path: {tokenizer}')
+    try:
+        queries = read_queries(c['queries'])
+        normal = read_queries(c['normal_queries'], normal=True)
+        query_ids = {q['query_id'] for q in queries}
+        pairs = [str(q.get('matched_pair_id')) for q in normal]
+        if len(normal) != len(queries) or set(pairs) != query_ids:
+            errors.append('normal_queries must contain exactly one matched_pair_id per IF query')
+    except (KeyError, OSError, ValueError) as exc:
+        errors.append(f'query validation failed: {exc}')
+    try:
+        callable_from_path(c.get('verification', {}).get('callable'))
+    except (ImportError, AttributeError, TypeError, ValueError) as exc:
+        errors.append(f'verification.callable is not importable: {exc}')
+
+    if c['quantizer'] == 'awq':
+        for seed in c['seeds']:
+            for variant in ('clean', 'fingerprinted'):
+                key = 'quantized_clean_checkpoint' if variant == 'clean' else 'quantized_fingerprinted_checkpoint'
+                value = c.get(key)
+                path = Path(str(value).format(seed=seed)) if value else None
+                if path is None or not path.is_dir():
+                    errors.append(f'{key} seed {seed} must be an existing directory: {value}')
+                    continue
+                sidecar = path/'metadata.json'
+                if not sidecar.is_file():
+                    errors.append(f'missing quantization metadata: {sidecar}')
+                    continue
+                try:
+                    validate_quantized_metadata(c, json.loads(sidecar.read_text(encoding='utf-8')),
+                                                c['clean_checkpoint' if variant == 'clean' else 'fingerprinted_checkpoint'], seed)
+                except (OSError, ValueError, json.JSONDecodeError) as exc:
+                    errors.append(f'{sidecar}: {exc}')
+    if errors:
+        raise ValueError('Stage 0 input validation failed:\n- ' + '\n- '.join(errors))
+    return True
 
 
 def jsonable(obj):

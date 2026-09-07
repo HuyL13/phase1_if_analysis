@@ -1,5 +1,7 @@
 extends: common.yaml
 quantizer: awq
 bits: 3
+symmetric: false
+zero_point: true
 quantized_clean_checkpoint: checkpoints/awq3/seed{seed}/clean
 quantized_fingerprinted_checkpoint: checkpoints/awq3/seed{seed}/fingerprinted

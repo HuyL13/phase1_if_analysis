@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import numpy as np
 import yaml
-from .io import load_config, run_metadata, write_json
+from .io import load_config, run_metadata, write_json, validate_config_inputs
 from .experiments import (baseline, parameter_analysis, layer_sensitivity, query_margins,
                           representation_drift, Runtime)
 from .reporting import integrate, validate_comparison
@@ -26,7 +26,7 @@ def execute(config, seed, stages, rtn3_results=None):
         if old['run_id'] != metadata['run_id']:
             raise ValueError('Existing output belongs to different inputs/config/code; choose a new output_root')
         metadata = old
-    if config['quantizer'] in ('gptq', 'awq'):
+    if config['quantizer'] == 'awq':
         exports = {variant: quantized_checkpoint(config, variant, seed)[1]
                    for variant in ('clean', 'fingerprinted')}
         metadata['quantized_checkpoint_metadata'] = exports
@@ -106,6 +106,8 @@ def main(argv=None):
     batch = sub.add_parser('batch',help='Stage 0 then Batch A, optionally Batch B, across configs')
     batch.add_argument('--configs',nargs='+',required=True)
     batch.add_argument('--include-batch-b',action='store_true')
+    validate = sub.add_parser('validate', help='Validate checkpoints, data, verifier and quantized exports')
+    validate.add_argument('--configs', nargs='+', required=True)
     compare = sub.add_parser('compare', help='Experiment 8: validate and integrate runs')
     compare.add_argument('--output-root',default='outputs')
     demo = sub.add_parser('smoke',help='Offline synthetic parameters only, never IF evidence')
@@ -113,6 +115,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command=='smoke':
         smoke(args.output)
+    elif args.command=='validate':
+        for path in args.configs:
+            config = load_config(path)
+            validate_config_inputs(config)
+            print(f'Validated {path}', flush=True)
     elif args.command=='compare':
         integrate(args.output_root)
     elif args.command=='run':
