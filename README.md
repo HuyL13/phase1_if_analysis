@@ -81,13 +81,13 @@ Các trường phải khớp config, kể cả đường dẫn `source_checkpoin
 
 ## Chạy thí nghiệm
 
-Sau khi cài dependencies và sửa `configs/common.yaml`, chạy toàn bộ bằng một lệnh:
+Chỉ cần có Python 3.10+ và sửa `configs/common.yaml`, chạy một lệnh để tự cài environment rồi chạy toàn bộ:
 
 ```bash
 bash run_full.sh
 ```
 
-Script chạy cả 5 quantizer, tất cả seed, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Tự dùng `.venv` nếu có; có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. GPTQ/AWQ cần checkpoint đã lượng tử hóa và export sẵn; script không thực hiện bước tạo checkpoint đó. Kết quả tổng hợp nằm trong `outputs/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
+Script tự tạo/tái sử dụng `.venv`, cài `.[models,test]`, kiểm tra dependencies rồi chạy cả 5 quantizer, tất cả seed, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Không cần activate hoặc chạy pip thủ công. Chọn Python để tạo env bằng `PYTHON=/path/to/python bash run_full.sh`; chỉ cài env bằng `bash run_full.sh --setup-only`. Cần mạng khi tải dependencies lần đầu. GPTQ/AWQ cần checkpoint đã lượng tử hóa và export sẵn; script không thực hiện bước tạo checkpoint đó. Kết quả tổng hợp nằm trong `outputs/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
 
 ```bash
 # Stage 0 + Batch A, đúng thứ tự trên tất cả config:
