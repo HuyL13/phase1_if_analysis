@@ -7,10 +7,8 @@ Repo độc lập triển khai Stage 0 và Experiments 1–8 của spec Phase 1.
 Python 3.10+. Chạy lệnh từ thư mục repo:
 
 ```bash
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-# Linux: source .venv/bin/activate
-python -m pip install -e ".[models,test]"
+python -m pip install -r requirements.txt
+python -m pip install --editable .
 python -m pytest -q
 phase1 smoke --output outputs/smoke
 ```
@@ -89,7 +87,7 @@ Chỉ cần có Python 3.10+ và sửa `configs/common.yaml`, chạy một lện
 bash run_full.sh
 ```
 
-Script tự tạo/tái sử dụng `.venv`, cài `.[models,test]`, kiểm tra dependencies rồi chạy FP, RTN3, RTN4 và AWQ3 với tất cả seed, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Không cần activate hoặc chạy pip thủ công. Chọn Python để tạo env bằng `PYTHON=/path/to/python bash run_full.sh`; chỉ cài env bằng `bash run_full.sh --setup-only`. Cần mạng khi tải dependencies lần đầu. Kết quả tổng hợp nằm trong `outputs/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
+Script dùng Python của environment server hiện tại, cài `requirements.txt`, kiểm tra dependencies rồi chạy FP, RTN3, RTN4 và AWQ3, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Không tạo `.venv`. Có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. Cần mạng khi cài dependencies lần đầu. Kết quả tổng hợp nằm trong `outputs/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
 
 Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries upstream, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, tự clone repo wrapper AWQ upstream nếu thiếu, sau đó tạo AWQ3 cho clean/fingerprinted theo từng seed, kiểm tra manifest và ghi provenance sidecar. Không có bước AWQ tự viết trong repo này. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
 
