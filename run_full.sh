@@ -4,6 +4,7 @@ set -euo pipefail
 # Resolve config/data paths consistently, even when invoked from another folder.
 REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd -- "$REPO_ROOT"
+printf 'RUNNER_MODE=existing-environment-no-install\n'
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat <<'HELP'
