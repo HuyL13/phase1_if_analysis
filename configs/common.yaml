@@ -3,7 +3,7 @@ model: NousResearch/Llama-2-7b-hf
 base_model_repo: NousResearch/Llama-2-7b-hf
 fingerprint_model_repo: cnut1648/LLaMA2-7B-fingerprinted-SFT
 if_upstream_repo: https://github.com/CAU-ISS-Lab/LLM-Fingerprint-and-Attacks
-if_query_url: https://raw.githubusercontent.com/CAU-ISS-Lab/LLM-Fingerprint-and-Attacks/main/imf_ptq/TFA_SVA/Fingerprint_dataset/IF/test_IF_total.jsonl
+if_query_url: https://raw.githubusercontent.com/CAU-ISS-Lab/LLM-Fingerprint-and-Attacks/main/TFA_SVA/Fingerprint_dataset/IF/test_IF_total.jsonl
 clean_checkpoint: checkpoints/clean
 fingerprinted_checkpoint: checkpoints/if-sft-official
 tokenizer: NousResearch/Llama-2-7b-hf
