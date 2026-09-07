@@ -15,7 +15,7 @@ The author [lists the configured SFT checkpoint](https://github.com/cnut1648/Mod
 
 ## Remaining link checks
 
-HTTP requests succeeded for both configured model repositories and their config files; both advertise safetensors weight indexes. WikiText (`Salesforce/wikitext`), Alpaca (`tatsu-lab/alpaca`), the PTQ wrapper repo and `tools/run_awq_upstream.py` exist. The wrapper repo's llm-awq submodule points to the advertised commit `d6e797a42b9ef7778de8ee2352116e0f48a78d61`, which also exists upstream.
+HTTP requests succeeded for both configured model repositories and their config files; both advertise safetensors weight indexes. WikiText (`Salesforce/wikitext`), Alpaca (`tatsu-lab/alpaca`), and the official AWQ repo (`mit-han-lab/llm-awq`) exist. The configured AWQ revision is `d6e797a42b9ef7778de8ee2352116e0f48a78d61`.
 
 Optional C4's configured revision exists. Optional `ptb_text_only` resolves to `ptb-text-only/ptb_text_only`. Successful metadata requests do not validate execution of dataset loaders against every datasets version or certify AWQ's numerical/coordinate correctness. The IF checkpoint has no README model card (404); its model/config/weight index links are available, and the author's GitHub README identifies the checkpoint.
 

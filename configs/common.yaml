@@ -25,8 +25,9 @@ calibration_sample_count: 128
 calibration_sequence_length: 2048
 calibration_sha256: null
 calibration: data/calibration.txt
-upstream_ptq_repo: ../imf-tier0-ptq
-upstream_ptq_repo_url: https://github.com/HuyL13/imf-tier0-ptq.git
+awq_upstream_repo: ../llm-awq
+awq_upstream_repo_url: https://github.com/mit-han-lab/llm-awq.git
+awq_upstream_revision: d6e797a42b9ef7778de8ee2352116e0f48a78d61
 queries: data/if_original_queries.jsonl
 normal_queries: data/if_original_matched_normal_queries.jsonl
 utility_corpus: data/heldout.txt

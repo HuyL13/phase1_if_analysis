@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import time
 from pathlib import Path
 
 import yaml
@@ -56,16 +57,21 @@ def download_calibration(target: str) -> None:
     print(f'Wrote Wikitext-2 train calibration: {destination}', flush=True)
 
 
-def ensure_upstream_repo(repo_path: str, repo_url: str) -> None:
+def ensure_awq_upstream_repo(repo_path: str, repo_url: str, revision: str | None) -> None:
     destination = Path(repo_path).resolve()
-    if (destination/'tools'/'run_awq_upstream.py').is_file():
-        print(f'Using existing upstream AWQ wrapper: {destination}', flush=True)
+    if (destination/'awq'/'quantize'/'pre_quant.py').is_file():
+        print(f'Using existing official AWQ repo: {destination}', flush=True)
+        if revision:
+            subprocess.run(['git', 'fetch', '--tags', 'origin'], cwd=destination, check=True)
+            subprocess.run(['git', 'checkout', revision], cwd=destination, check=True)
         return
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
-        raise FileExistsError(f'Upstream path exists but is incomplete: {destination}')
-    print(f'Cloning upstream AWQ wrapper: {repo_url} -> {destination}', flush=True)
-    subprocess.run(['git', 'clone', '--recurse-submodules', repo_url, str(destination)], check=True)
+        raise FileExistsError(f'Official AWQ path exists but is incomplete: {destination}')
+    print(f'Cloning official AWQ repo: {repo_url} -> {destination}', flush=True)
+    subprocess.run(['git', 'clone', repo_url, str(destination)], check=True)
+    if revision:
+        subprocess.run(['git', 'checkout', revision], cwd=destination, check=True)
 
 
 def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float, fingerprint_path: str) -> None:
@@ -80,19 +86,27 @@ def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float, 
                         if line.strip()]
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo, use_fast=False)
     candidates = load_dataset('tatsu-lab/alpaca', split='train')
+    print(f'Preparing {len(candidates)} Alpaca candidates for matched normal queries...', flush=True)
+    started = time.time()
+    prepared = []
+    for index, candidate in enumerate(candidates):
+        text = str(candidate['instruction'])
+        if candidate.get('input'):
+            text += '\n' + str(candidate['input'])
+        prompt = normal_prompt(text)
+        length = len(tokenizer(prompt, add_special_tokens=True).input_ids)
+        prepared.append((index, prompt, length))
+        if (index + 1) % 5000 == 0:
+            print(f'Prepared {index + 1}/{len(candidates)} normal candidates', flush=True)
+    print(f'Prepared normal candidate lengths in {time.time() - started:.1f}s', flush=True)
     normal = []
     used = set()
     for row in fingerprint_rows:
         reference_length = len(tokenizer(row['prompt'], add_special_tokens=True).input_ids)
         ranked = []
-        for index, candidate in enumerate(candidates):
+        for index, prompt, length in prepared:
             if index in used:
                 continue
-            text = str(candidate['instruction'])
-            if candidate.get('input'):
-                text += '\n' + str(candidate['input'])
-            prompt = normal_prompt(text)
-            length = len(tokenizer(prompt, add_special_tokens=True).input_ids)
             relative = abs(length-reference_length)/max(length, reference_length)
             ranked.append((relative, index, prompt))
         ranked.sort(key=lambda item: (item[0], item[1]))
@@ -123,4 +137,8 @@ if __name__ == '__main__':
     download_calibration(config['calibration'])
     download_normal_queries(config['normal_queries'], config['tokenizer'],
                             config.get('matching_length_tolerance', 0.25), config['queries'])
-    ensure_upstream_repo(config['upstream_ptq_repo'], config['upstream_ptq_repo_url'])
+    ensure_awq_upstream_repo(
+        config['awq_upstream_repo'],
+        config['awq_upstream_repo_url'],
+        config.get('awq_upstream_revision'),
+    )
