@@ -9,7 +9,7 @@ if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     cat <<'HELP'
 Usage: bash run_full.sh [config.yaml ...]
 
-Uses the server's existing Python environment and installs requirements.txt.
+Uses the server's existing Python environment; install requirements.txt separately before running.
 Downloads/reuses the base and IF-SFT checkpoints, validates all inputs, then runs Stage 0 -> Batch A -> Batch B -> combined CSVs, figures and report.
 Default configs: fp, rtn3, rtn4, awq3 (all configured seeds).
 Configure checkpoints, datasets and the original IF verifier first.
@@ -35,11 +35,6 @@ fi
 
 export HF_HOME="${HF_HOME:-$REPO_ROOT/.cache/huggingface}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-$REPO_ROOT/.cache/matplotlib}"
-
-printf 'Installing project dependencies into the active server environment...\n'
-"$PYTHON_BIN" -m pip install -r requirements.txt
-"$PYTHON_BIN" -m pip install --editable .
-"$PYTHON_BIN" -m pip check
 
 CONFIGS=(configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml)
 if (( $# > 0 )); then
