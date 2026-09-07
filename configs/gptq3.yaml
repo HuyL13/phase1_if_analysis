@@ -1,0 +1,5 @@
+extends: common.yaml
+quantizer: gptq
+bits: 3
+quantized_clean_checkpoint: checkpoints/gptq3/seed{seed}/clean
+quantized_fingerprinted_checkpoint: checkpoints/gptq3/seed{seed}/fingerprinted

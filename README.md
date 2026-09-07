@@ -1,0 +1,126 @@
+# Phase 1 IF quantization analysis
+
+Repo độc lập triển khai Stage 0 và Experiments 1–8 của spec Phase 1. Chỉ phân tích cơ chế; không triển khai embedding, thuật toán xóa fingerprint hoặc Phase 2.
+
+## Cài và kiểm tra nhanh
+
+Python 3.10+. Chạy lệnh từ thư mục repo:
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# Linux: source .venv/bin/activate
+python -m pip install -e ".[models,test]"
+python -m pytest -q
+phase1 smoke --output outputs/smoke
+```
+
+Smoke chạy offline trên tensor tổng hợp, xuất CSV/PNG/SVG/report. Không tạo điểm IF hoặc kết luận thực nghiệm giả. Test model nhỏ cũng chạy offline sau khi cài dependencies.
+
+## Dữ liệu và cấu hình cần cung cấp
+
+Sửa `configs/common.yaml`: checkpoint clean, checkpoint IF, tokenizer chung, đường dẫn dữ liệu, device/dtype, generation config gốc và callable verifier IF gốc. Chưa có checkpoint/verifier IF trong repo này. Không suy ra verifier IF từ code ImF ở repo khác.
+
+Checkpoint phân tích trọng số: thư mục Hugging Face với `model.safetensors` hoặc `model.safetensors.index.json` và `config.json`. Loader dùng model skeleton trên meta device để loại buffer; đọc từng tensor, không nạp cả bốn checkpoint. Cần đủ RAM cho một số bản sao float64 của tensor lớn nhất. Runtime inference nạp từng model trên một device; chọn dtype phù hợp với checkpoint và dùng cùng dtype cho mọi quantizer.
+
+`data/if_queries.jsonl`, mỗi dòng:
+
+```json
+{"query_id":"q01","prompt":"Your original IF prompt","target":"Original target response","language":"en","structure":"instruction"}
+```
+
+`data/matched_normal_queries.jsonl`, một prompt đối chứng cho mỗi IF query:
+
+```json
+{"query_id":"n01","matched_pair_id":"q01","prompt":"A comparable public prompt","language":"en","structure":"instruction"}
+```
+
+Normal prompts phải cùng language/structure và chênh lệch độ dài token trong tolerance. Chuẩn bị corpus held-out cố định trong `data/heldout.txt`. `prompt_mode: chat` dùng `messages` nếu có, hoặc system prompt + prompt qua chat template. Có thể cung cấp `prompt_token_ids` và `target_token_ids` để giữ chính xác tokenization của pipeline IF. Mặc định target được tokenize riêng với `add_special_tokens=False`, rồi nối vào prompt; kiểm tra quy ước này khớp verifier gốc, nhất là BPE tại ranh giới prompt/response.
+
+## Kết nối verifier gốc
+
+Đặt `verification.callable: your_package.adapter:verify`. Package của bạn phải import được trong cùng environment. Adapter gọi verifier gốc, dùng nguyên generation/settings được truyền; không viết lại tiêu chí verification. Signature:
+
+```python
+def verify(*, model, tokenizer, queries, generation, settings, seed):
+    # Delegate to your existing IF pipeline and normalize its output.
+    return {
+        "fingerprint_score": original_score,
+        "queries": [
+            {"query_id": "q01", "verified": True, "score": 1.0,
+             "generated_text": original_generated_text,
+             "target_text": original_target_text}
+        ],
+    }
+```
+
+Đoạn trên mô tả interface, không phải verifier chạy sẵn. Adapter chịu trách nhiệm giữ nguyên prompt/system/chat-template/decoding của IF; pipeline không thay verifier bằng exact match. Mọi model dùng chung generation defaults từ checkpoint IF FP, cộng cấu hình `generation` truyền vào verifier; defaults được ghi metadata, tránh checkpoint quantized có defaults khác. Cần trả đúng một record cho mỗi query. Không lưu secret key trực tiếp trong YAML/metadata; verifier có thể đọc key từ environment hoặc key file.
+
+## RTN, GPTQ, AWQ
+
+RTN thực thi groupwise theo hàng, nhóm dọc chiều input của matrix, xử lý nhóm cuối ngắn. Symmetric: mã `[-(2^(b-1)-1), +(2^(b-1)-1)]`, scale=maxabs/qmax, không zero-point. Asymmetric: mã `[0, 2^b-1]`, range bao gồm 0, zero-point làm tròn. `numpy.rint` dùng ties-to-even. Đây là RTN fake quantization với trọng số dequantized; không phải kernel inference packed và có thể khác RTN backend ban đầu của bạn. Để tái lập quan sát 1.00/0.75, trước tiên đối chiếu quy ước RTN và Stage 0. Không mặc định coi các con số tham chiếu là kết quả.
+
+GPTQ3/AWQ3 dùng **checkpoint đã lượng tử hóa bởi backend gốc**, xuất về HF dequantized **trong cùng hệ tọa độ parameter** của model gốc. Repo không gọi RTN rồi gắn nhãn GPTQ/AWQ. Packed `qweight/qzeros` bị từ chối. Với AWQ, phải hoàn nguyên mọi reparameterization/scaling/fusion để `Q(W_F)-Q(W)` có ý nghĩa; chỉ unpack integer codes là chưa đủ. Bảo toàn tokenizer, architecture, module grouping; cùng calibration token data cho clean/IF và GPTQ/AWQ ở cùng seed.
+
+Mỗi thư mục checkpoint GPTQ/AWQ phải có `metadata.json`:
+
+```json
+{
+  "quantizer": "gptq", "bits": 3, "group_size": 128,
+  "symmetric": true, "zero_point": false,
+  "calibration_dataset": "public_calibration",
+  "calibration_sample_count": 128, "calibration_sequence_length": 2048,
+  "calibration_sha256": "SHA256_OF_EXACT_CALIBRATION_TOKEN_DATA",
+  "seed": 42, "source_checkpoint": "checkpoints/clean",
+  "storage_representation": "hf_dequantized",
+  "quantization_library_version": "backend-version-or-commit"
+}
+```
+
+Các trường phải khớp config, kể cả đường dẫn `source_checkpoint`. Mẫu config dùng `{seed}` trong đường dẫn checkpoint. Nếu calibration được lấy mẫu khác theo seed, tạo output root riêng cho mỗi bộ calibration/config; cấu hình hiện dùng một calibration hash cố định cho mọi seed. GPTQ/AWQ và stochastic generation yêu cầu ≥3 seeds. Để tránh so sánh vô tình khác nhóm/zero-point, summary từ chối các quantizer có setting này khác nhau; dùng nghiên cứu ablation/output root riêng nếu cố ý thay đổi.
+
+## Chạy thí nghiệm
+
+Sau khi cài dependencies và sửa `configs/common.yaml`, chạy toàn bộ bằng một lệnh:
+
+```bash
+bash run_full.sh
+```
+
+Script chạy cả 5 quantizer, tất cả seed, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Tự dùng `.venv` nếu có; có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. GPTQ/AWQ cần checkpoint đã lượng tử hóa và export sẵn; script không thực hiện bước tạo checkpoint đó. Kết quả tổng hợp nằm trong `outputs/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
+
+```bash
+# Stage 0 + Batch A, đúng thứ tự trên tất cả config:
+phase1 batch --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/gptq3.yaml configs/awq3.yaml
+
+# Sau khi xem tín hiệu Batch A, chạy lại với Batch B:
+phase1 batch --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/gptq3.yaml configs/awq3.yaml --include-batch-b
+
+# Chỉ phân tích parameter, chưa cần IF verifier:
+python scripts/01_parameter_update_retention.py --config configs/rtn3.yaml
+python scripts/02_update_vs_quant_step.py --config configs/rtn3.yaml
+python scripts/03_error_alignment.py --config configs/rtn3.yaml
+
+# Chạy riêng những stage cần thiết; không cần chạy lại Batch A:
+phase1 run --config configs/rtn3.yaml --stages 3,6,7
+python scripts/08_compare_quantizers.py --output-root outputs
+```
+
+Có đủ scripts `00`–`08` theo spec. Experiment 4 chỉ quét RTN3; bắt đầu từ FP và khôi phục weight trong `finally` sau mỗi block/module. Chọn top 3 layer theo fingerprint drop, không theo ratio gần chia 0. Experiment 5 tự lấy kết quả RTN3 cùng seed; có thể truyền `--rtn3-results 'path/seed{seed}/baseline/if_query_results.csv'`, kèm metadata của run đó. Hidden drift yêu cầu Experiment 4 đã chạy.
+
+## Outputs và cách đọc
+
+Mỗi run: `outputs/<fp|rtn3|rtn4|gptq3|awq3>/seed42/metadata.json` và các thư mục kết quả đúng tên spec. Tách seed để không ghi đè; summary gom vào `outputs/summary/`, gồm `quantizer_comparison.csv`, `statistics.json`, `phase1_summary.md`, `figures/*.png` và `*.svg`.
+
+- Retention/collision/alignment: tensor, block, module và global. Aggregate L2 bằng căn tổng bình phương; collision dùng tổng count, không trung bình tỷ lệ tensor. Không clip retention >1. Collision không có weight thay đổi để trống.
+- Resolution: exact quantiles/fractions cho weight có `|delta| > 1e-8`; scale của clean grid. Crossing dùng **cùng clean grid** cho cả weight clean/IF; collision so giá trị dequantized của hai grid được fit riêng. Khoảng cách boundary chỉ xét boundary nội bộ, đúng cả saturation tails.
+- Biểu đồ ECDF/scatter resolution dùng mẫu capped đều theo tensor, được ghi rõ; không phải pooled global distribution. Curve layer resolution là trung bình thống kê tensor.
+- Teacher forcing đo target token tại causal-shift đúng. Nhóm survived/failed dựa trên RTN3, còn margin để so nhóm là **FP trước lượng tử hóa**. Xuất thêm token-level CSV.
+- PPL là exp(total NLL / scored tokens), chia corpus thành cửa sổ overlap một token; mỗi token trừ token đầu được chấm đúng một lần. Đây là fixed-window PPL, không phải sliding context toàn phần.
+- Logit drift đo ở final prompt token: KL(FP||Q), JS, cosine, top-1/5/10. Hidden drift hook trực tiếp output transformer block, lưu final prompt token và mean prompt tokens; không nhầm embedding hoặc final norm là một block.
+- Drift chạy cả clean và IF, fingerprint và matched normal prompts. Statistics có paired logit JS difference-in-differences, bootstrap mean/std/median/95% CI; gom repeated seeds theo query trước bootstrap. Survived-vs-failed có Mann–Whitney và Cliff's delta riêng từng seed.
+- Metadata ghi config, seed, versions, GPU, thời gian UTC, git commit nếu có, source-code hash và data hashes. Run từ chối trộn output nếu code/config/input thay đổi; chọn output root mới. Checkpoint được ghi bằng path; nếu thay nội dung checkpoint tại cùng path, dùng thư mục/version mới.
+
+`phase1_summary.md` nêu Q1–Q7, dữ liệu còn thiếu và tag access. Báo cáo **không tự tuyên bố** H1–H5 đúng hay Phase 1 nghiên cứu đã thành công: cần checkpoint thực, verifier gốc và đánh giá bằng chứng. Report/plots vẫn chạy khi mới có Batch A hoặc parameter-only, phần thiếu ghi rõ.
+
+Kiến trúc mặc định nhận các block `layers.N`, `h.N`, `blocks.N` và các module q/k/v/o/gate/up/down_proj. Model khác phải cấu hình `module_pattern`, `block_pattern`, `module_aliases` tương ứng. Cấu hình pinned cho kết quả công bố nên khóa môi trường sau cài bằng `pip freeze`; môi trường kiểm thử hiện ghi trong `docs/validation.md`.

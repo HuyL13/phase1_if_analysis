@@ -1,0 +1,34 @@
+# Run from the repository root. Replace checkpoint/data/verifier fields.
+model: YOUR_IF_MODEL
+clean_checkpoint: checkpoints/clean
+fingerprinted_checkpoint: checkpoints/fingerprinted
+tokenizer: checkpoints/clean
+tokenizer_revision: null
+dtype: float32
+device: cuda:0
+output_root: outputs
+seeds: [42, 43, 44]
+group_size: 128
+symmetric: true
+zero_point: false
+# Exact shared calibration token-data provenance for GPTQ and AWQ exports.
+calibration_dataset: public_calibration
+calibration_sample_count: 128
+calibration_sequence_length: 2048
+calibration_sha256: null
+queries: data/if_queries.jsonl
+normal_queries: data/matched_normal_queries.jsonl
+utility_corpus: data/heldout.txt
+ppl_sequence_length: 1024
+max_prompt_length: 2048
+prompt_mode: raw
+add_special_tokens: true
+matching_length_tolerance: 0.25
+top_layers: 3
+sample_limit: 4096
+# Explicitly copy the original IF generation configuration here.
+# No decoding defaults are injected by this package.
+generation: {}
+verification:
+  callable: null
+  settings: {}

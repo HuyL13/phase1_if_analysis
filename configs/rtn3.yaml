@@ -1,0 +1,3 @@
+extends: common.yaml
+quantizer: rtn
+bits: 3
