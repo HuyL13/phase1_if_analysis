@@ -83,7 +83,7 @@ Mỗi thư mục checkpoint AWQ phải có `metadata.json`:
 }
 ```
 
-Các trường phải khớp config, kể cả đường dẫn `source_checkpoint`. Mẫu config dùng `{seed}` trong đường dẫn checkpoint. Nếu calibration được lấy mẫu khác theo seed, tạo output root riêng cho mỗi bộ calibration/config; cấu hình hiện dùng một calibration hash cố định cho mọi seed. AWQ và stochastic generation yêu cầu ≥3 seeds.
+Các trường phải khớp config, kể cả đường dẫn `source_checkpoint`. Mẫu config dùng `{seed}` trong đường dẫn checkpoint. Nếu calibration được lấy mẫu khác theo seed, tạo output root riêng cho mỗi bộ calibration/config; cấu hình hiện dùng một calibration hash cố định. Stochastic generation yêu cầu ≥3 seeds; AWQ vendored mặc định chạy một seed để tránh lượng tử hóa lặp vô ích.
 
 ## Chạy thí nghiệm
 

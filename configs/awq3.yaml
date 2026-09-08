@@ -1,6 +1,7 @@
 extends: common.yaml
 quantizer: awq
 bits: 3
+seeds: [42]
 symmetric: false
 zero_point: true
 quantized_clean_checkpoint: checkpoints/awq3/seed{seed}/clean

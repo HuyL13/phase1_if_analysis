@@ -63,9 +63,9 @@ def load_config(path):
         raise ValueError('seeds must be a nonempty list of integers')
     if len(set(c['seeds'])) != len(c['seeds']):
         raise ValueError('seeds must be unique')
-    stochastic = c['generation'].get('do_sample', False) or c['quantizer'] == 'awq'
+    stochastic = c['generation'].get('do_sample', False)
     if stochastic and len(c['seeds']) < 3:
-        raise ValueError('Stochastic/calibrated experiments require at least three seeds')
+        raise ValueError('Stochastic generation requires at least three seeds')
     if c['quantizer'] == 'rtn' and c['zero_point'] == c['symmetric']:
         raise ValueError('RTN symmetric requires zero_point=false; asymmetric requires true')
     if c['prompt_mode'] not in ('raw', 'chat'):

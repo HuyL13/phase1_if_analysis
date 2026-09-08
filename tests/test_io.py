@@ -10,11 +10,17 @@ def test_duplicate_query_ids_are_rejected(tmp_path):
         read_queries(p)
 
 
-def test_calibrated_quantizer_requires_three_seeds(tmp_path):
+def test_stochastic_generation_requires_three_seeds(tmp_path):
     p = tmp_path/'c.yaml'
-    p.write_text('model: test\nclean_checkpoint: a\nfingerprinted_checkpoint: b\ntokenizer: a\nquantizer: awq\nbits: 3\nseeds: [42]\n')
+    p.write_text('model: test\nclean_checkpoint: a\nfingerprinted_checkpoint: b\ntokenizer: a\nquantizer: fp\nbits: 16\nseeds: [42]\ngeneration: {do_sample: true}\n')
     with pytest.raises(ValueError, match='three seeds'):
         load_config(p)
+
+
+def test_awq_can_run_single_deterministic_seed(tmp_path):
+    p = tmp_path/'c.yaml'
+    p.write_text('model: test\nclean_checkpoint: a\nfingerprinted_checkpoint: b\ntokenizer: a\nquantizer: awq\nbits: 3\nseeds: [42]\n')
+    assert load_config(p)['seeds'] == [42]
 
 
 def test_quantizer_metadata_mismatch_rejected():
