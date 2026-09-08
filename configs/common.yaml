@@ -25,9 +25,8 @@ calibration_sample_count: 16
 calibration_sequence_length: 512
 calibration_sha256: null
 calibration: data/calibration.txt
-awq_code_repo: .cache/awq_drive_code
-awq_drive_url: https://drive.google.com/drive/folders/13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evgA
-awq_code_revision: google-drive-13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evgA
+awq_code_repo: vendor/drive_awq
+awq_code_revision: google-drive-13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evg
 queries: data/if_original_queries.jsonl
 normal_queries: data/if_original_matched_normal_queries.jsonl
 utility_corpus: data/heldout.txt

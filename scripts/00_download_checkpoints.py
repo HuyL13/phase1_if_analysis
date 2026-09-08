@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
-import sys
 import time
 from pathlib import Path
 
@@ -59,29 +57,22 @@ def download_calibration(target: str) -> None:
 
 
 def find_awq_code_root(destination: Path) -> Path | None:
-    if (destination/'awq'/'quantize'/'pre_quant.py').is_file():
+    if (destination/'src'/'quantization'/'awq.py').is_file():
         return destination
-    for candidate in destination.rglob('pre_quant.py'):
+    for candidate in destination.rglob('awq.py'):
         root = candidate.parents[2]
-        if (root/'awq'/'quantize'/'pre_quant.py').is_file():
+        if (root/'src'/'quantization'/'awq.py').is_file():
             return root
     return None
 
 
-def ensure_awq_drive_code(repo_path: str, drive_url: str) -> None:
+def ensure_awq_drive_code(repo_path: str) -> None:
     destination = Path(repo_path).resolve()
     root = find_awq_code_root(destination) if destination.exists() else None
     if root is not None:
-        print(f'Using existing Drive AWQ code: {root}', flush=True)
+        print(f'Using vendored Drive AWQ code: {root}', flush=True)
         return
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        raise FileExistsError(f'AWQ Drive code path exists but has no awq/quantize/pre_quant.py: {destination}')
-    print(f'Downloading AWQ code from Drive: {drive_url} -> {destination}', flush=True)
-    subprocess.run([sys.executable, '-m', 'gdown', '--folder', drive_url, '-O', str(destination)], check=True)
-    root = find_awq_code_root(destination)
-    if root is None:
-        raise FileNotFoundError(f'Drive folder did not contain awq/quantize/pre_quant.py: {destination}')
+    raise FileNotFoundError(f'Vendored Drive AWQ code missing: {destination}/src/quantization/awq.py')
 
 
 def download_normal_queries(target: str, tokenizer_repo: str, tolerance: float, fingerprint_path: str) -> None:
@@ -147,4 +138,4 @@ if __name__ == '__main__':
     download_calibration(config['calibration'])
     download_normal_queries(config['normal_queries'], config['tokenizer'],
                             config.get('matching_length_tolerance', 0.25), config['queries'])
-    ensure_awq_drive_code(config['awq_code_repo'], config['awq_drive_url'])
+    ensure_awq_drive_code(config['awq_code_repo'])

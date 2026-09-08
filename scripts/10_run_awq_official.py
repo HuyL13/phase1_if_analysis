@@ -6,7 +6,6 @@ import argparse
 import json
 import random
 import sys
-import types
 from pathlib import Path
 
 
@@ -39,27 +38,6 @@ def load_calibration_texts(path: Path) -> list[str]:
     if not texts:
         raise ValueError('calibration file is empty')
     return texts
-
-
-def token_blocks(texts, tokenizer, seqlen: int, limit: int):
-    import torch
-
-    encoded = [tokenizer.encode(text, add_special_tokens=False) for text in texts]
-    flat = [token for sample in encoded for token in sample]
-    blocks = []
-    for offset in range(0, len(flat) - seqlen + 1, seqlen):
-        blocks.append(torch.tensor([flat[offset:offset + seqlen]], dtype=torch.long))
-        if len(blocks) == limit:
-            break
-    if not blocks:
-        raise ValueError(f'calibration corpus has fewer than {seqlen} tokens')
-    return blocks
-
-
-def install_awq_kernel_stub() -> None:
-    stub = types.ModuleType('awq_inference_engine')
-    stub.__file__ = '<phase1-awq-kernel-stub>'
-    sys.modules.setdefault('awq_inference_engine', stub)
 
 
 def model_dtype(torch, device: str):
@@ -146,14 +124,11 @@ def main() -> None:
         torch.cuda.manual_seed_all(args.seed)
 
     awq_repo = Path(args.awq_repo).resolve()
-    if not (awq_repo/'awq'/'quantize'/'pre_quant.py').is_file():
+    if not (awq_repo/'src'/'quantization'/'awq.py').is_file():
         raise FileNotFoundError(f'AWQ code checkout is incomplete: {awq_repo}')
-    install_awq_kernel_stub()
     sys.path.insert(0, str(awq_repo))
 
-    from awq.quantize.pre_quant import apply_awq, run_awq
-    from awq.quantize.quantizer import pseudo_quantize_model_weight
-    import awq.utils.calib_data as calibration_module
+    from src.quantization.awq import AWQConfig, AWQQuantizerXL
 
     if args.device.startswith('cuda') and not torch.cuda.is_available():
         raise RuntimeError(f'{args.device} requested, but CUDA is not available')
@@ -171,19 +146,14 @@ def main() -> None:
     ).eval()
 
     texts = load_calibration_texts(Path(args.calibration))
-    fixed_blocks = token_blocks(texts, tokenizer, args.seqlen, args.nsamples)
-
-    def fixed_calibration(**_kwargs):
-        return fixed_blocks
-
-    calibration_module.get_calib_dataset = fixed_calibration
-    q_config = {'zero_point': True, 'q_group_size': args.group_size}
-    results = run_awq(
-        model, tokenizer, args.bits, q_config,
-        n_samples=len(fixed_blocks), seqlen=args.seqlen, calib_data='phase1_fixed',
+    awq_config = AWQConfig(
+        bits=args.bits,
+        group_size=args.group_size,
+        max_tokens_per_sample=args.seqlen,
+        layer_batch_size=1,
     )
-    apply_awq(model, results)
-    pseudo_quantize_model_weight(model, w_bit=args.bits, q_config=q_config)
+    quantizer = AWQQuantizerXL(model, tokenizer, device=args.device, config=awq_config)
+    quantizer.quantize_model_sequential(texts, n_samples=args.nsamples)
 
     output = Path(args.output)
     output.mkdir(parents=True, exist_ok=False)
@@ -193,8 +163,8 @@ def main() -> None:
         'backend': 'awq',
         'bits': args.bits,
         'group_size': args.group_size,
-        'upstream': 'google-drive-awq-code',
-        'upstream_sha': '13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evgA',
+        'upstream': 'vendored-drive-awq-code',
+        'upstream_sha': '13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evg',
         'dense_quantized_weights': True,
     }
     (output/'quantization_manifest.json').write_text(

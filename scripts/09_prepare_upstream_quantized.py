@@ -32,18 +32,18 @@ def prepare(config_path: str, python: str) -> None:
     if config['quantizer'] != 'awq':
         return
     repo = Path(config['awq_code_repo']).resolve()
-    if not (repo/'awq'/'quantize'/'pre_quant.py').is_file():
-        matches = list(repo.rglob('pre_quant.py')) if repo.exists() else []
+    if not (repo/'src'/'quantization'/'awq.py').is_file():
+        matches = list(repo.rglob('awq.py')) if repo.exists() else []
         for match in matches:
             root = match.parents[2]
-            if (root/'awq'/'quantize'/'pre_quant.py').is_file():
+            if (root/'src'/'quantization'/'awq.py').is_file():
                 repo = root
                 break
     wrapper = Path(__file__).resolve().parent/'10_run_awq_official.py'
     calibration = Path(config['calibration']).resolve()
     if not wrapper.is_file():
         raise FileNotFoundError(f'AWQ runner not found: {wrapper}')
-    if not (repo/'awq'/'quantize'/'pre_quant.py').is_file():
+    if not (repo/'src'/'quantization'/'awq.py').is_file():
         raise FileNotFoundError(f'Drive AWQ code not found or incomplete: {repo}')
     if not calibration.is_file():
         raise FileNotFoundError(f'Calibration artifact not found: {calibration}')
