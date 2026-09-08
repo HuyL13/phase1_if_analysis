@@ -85,3 +85,68 @@ def test_vendored_awq_quantizer_runs_without_decoder_layer_forward():
     quantizer.quantize_model_sequential(['hello world'], n_samples=1)
 
     assert 'proj' in quantizer.layer_stats
+
+
+def test_awq_prepare_reuses_exported_checkpoint_and_repairs_metadata(tmp_path, monkeypatch):
+    path = Path(__file__).resolve().parents[1] / 'scripts' / '09_prepare_upstream_quantized.py'
+    spec = importlib.util.spec_from_file_location('prepare_awq', path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    repo = tmp_path / 'awq_code'
+    (repo / 'src' / 'quantization').mkdir(parents=True)
+    (repo / 'src' / 'quantization' / 'awq.py').write_text('', encoding='utf-8')
+    calibration = tmp_path / 'calibration.jsonl'
+    calibration.write_text('{"text":"calibration"}\n', encoding='utf-8')
+    clean = tmp_path / 'clean'
+    fp = tmp_path / 'fp'
+    clean.mkdir()
+    fp.mkdir()
+    for output in (tmp_path / 'awq' / 'clean', tmp_path / 'awq' / 'fp'):
+        output.mkdir(parents=True)
+        (output / 'config.json').write_text('{}', encoding='utf-8')
+        (output / 'model.safetensors').write_bytes(b'weights')
+        (output / 'quantization_manifest.json').write_text(
+            json.dumps({
+                'backend': 'awq',
+                'bits': 3,
+                'group_size': 128,
+                'upstream': 'vendored-drive-awq-code',
+                'upstream_sha': 'test',
+                'dense_quantized_weights': True,
+            }),
+            encoding='utf-8',
+        )
+    config = tmp_path / 'awq.yaml'
+    config.write_text(
+        '\n'.join([
+            'model: test',
+            f'clean_checkpoint: {clean}',
+            f'fingerprinted_checkpoint: {fp}',
+            'tokenizer: test',
+            'quantizer: awq',
+            'bits: 3',
+            'symmetric: false',
+            'zero_point: true',
+            'seeds: [42]',
+            'calibration_dataset: public',
+            'calibration_sample_count: 16',
+            'calibration_sequence_length: 512',
+            f'calibration: {calibration}',
+            f'awq_code_repo: {repo}',
+            f'quantized_clean_checkpoint: {tmp_path / "awq" / "clean"}',
+            f'quantized_fingerprinted_checkpoint: {tmp_path / "awq" / "fp"}',
+        ]) + '\n',
+        encoding='utf-8',
+    )
+
+    def fail_if_quantize_runs(*_args, **_kwargs):
+        raise AssertionError('prepare should reuse exported AWQ checkpoints')
+
+    monkeypatch.setattr(module.subprocess, 'run', fail_if_quantize_runs)
+
+    module.prepare(str(config), 'python')
+
+    assert (tmp_path / 'awq' / 'clean' / 'metadata.json').is_file()
+    assert (tmp_path / 'awq' / 'fp' / 'metadata.json').is_file()

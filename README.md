@@ -95,7 +95,7 @@ bash run_full.sh
 
 Script chỉ dùng Python của environment server hiện tại và không tự cài package, không tạo `.venv`. Cài dependencies một lần bằng `python -m pip install -r requirements.txt`, sau đó chạy FP, RTN3, RTN4 và AWQ3, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. Kết quả tổng hợp nằm trong `outputs/original_if/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
 
-Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries gốc, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, sau đó tạo AWQ3 cho clean/fingerprinted theo từng seed bằng code vendored trong repo, kiểm tra manifest và ghi provenance sidecar. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
+Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries gốc, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, sau đó chuẩn bị AWQ3 cho clean/fingerprinted bằng code vendored trong repo. AWQ là artifact cache: nếu checkpoint, manifest và metadata đã đủ thì lần sau chỉ reuse/load ra phân tích, không gọi quantize lại. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
 
 ```bash
 # Stage 0 + Batch A, đúng thứ tự trên tất cả config:
