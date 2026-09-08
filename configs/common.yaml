@@ -15,7 +15,7 @@ tokenizer_revision: null
 dtype: bfloat16
 device: cuda:0
 output_root: outputs/original_if
-seeds: [42, 43, 44]
+seeds: [42]
 group_size: 128
 symmetric: true
 zero_point: false
