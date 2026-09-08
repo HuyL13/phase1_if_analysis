@@ -36,6 +36,7 @@ fi
 
 export HF_HOME="${HF_HOME:-$REPO_ROOT/.cache/huggingface}"
 export MPLCONFIGDIR="${MPLCONFIGDIR:-$REPO_ROOT/.cache/matplotlib}"
+export PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
 
 CONFIGS=(configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml)
 if (( $# > 0 )); then
