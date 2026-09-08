@@ -1,4 +1,4 @@
-"""Create AWQ checkpoints with the pinned upstream Llama wrapper."""
+"""Create AWQ checkpoints with the configured Drive AWQ code."""
 from __future__ import annotations
 
 import argparse
@@ -31,13 +31,20 @@ def prepare(config_path: str, python: str) -> None:
     config = load_config(config_path)
     if config['quantizer'] != 'awq':
         return
-    repo = Path(config['awq_upstream_repo']).resolve()
+    repo = Path(config['awq_code_repo']).resolve()
+    if not (repo/'awq'/'quantize'/'pre_quant.py').is_file():
+        matches = list(repo.rglob('pre_quant.py')) if repo.exists() else []
+        for match in matches:
+            root = match.parents[2]
+            if (root/'awq'/'quantize'/'pre_quant.py').is_file():
+                repo = root
+                break
     wrapper = Path(__file__).resolve().parent/'10_run_awq_official.py'
     calibration = Path(config['calibration']).resolve()
     if not wrapper.is_file():
         raise FileNotFoundError(f'AWQ runner not found: {wrapper}')
     if not (repo/'awq'/'quantize'/'pre_quant.py').is_file():
-        raise FileNotFoundError(f'Official AWQ repo not found or incomplete: {repo}')
+        raise FileNotFoundError(f'Drive AWQ code not found or incomplete: {repo}')
     if not calibration.is_file():
         raise FileNotFoundError(f'Calibration artifact not found: {calibration}')
     calibration_hash = sha256(calibration)
@@ -54,14 +61,14 @@ def prepare(config_path: str, python: str) -> None:
                 print(f'Using existing {config["quantizer"]}{config["bits"]} seed={seed} {variant}', flush=True)
                 continue
             if output.exists():
-                raise FileExistsError(f'Incomplete upstream output exists; remove it before retrying: {output}')
+                raise FileExistsError(f'Incomplete AWQ output exists; remove it before retrying: {output}')
             command = [python, str(wrapper), '--awq-repo', str(repo), '--model-path', str(source),
                        '--calibration', str(calibration), '--output', str(output),
                        '--bits', str(config['bits']), '--group-size', str(config['group_size']),
                        '--seed', str(seed), '--nsamples', str(config['calibration_sample_count']),
                        '--seqlen', str(config['calibration_sequence_length']),
                        '--device', str(config.get('device', 'cuda:0'))]
-            print('Running upstream:', ' '.join(command), flush=True)
+            print('Running AWQ:', ' '.join(command), flush=True)
             result = subprocess.run(command, cwd=repo)
             sigkill = getattr(signal, 'SIGKILL', None)
             if sigkill is not None and result.returncode == -sigkill:
@@ -72,7 +79,7 @@ def prepare(config_path: str, python: str) -> None:
             result.check_returncode()
             manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
             if manifest.get('backend') != config['quantizer'] or not manifest.get('dense_quantized_weights'):
-                raise ValueError(f'Unexpected upstream manifest: {manifest}')
+                raise ValueError(f'Unexpected AWQ manifest: {manifest}')
             sidecar = {
                 'quantizer': config['quantizer'], 'bits': config['bits'],
                 'group_size': config['group_size'], 'symmetric': config['symmetric'],

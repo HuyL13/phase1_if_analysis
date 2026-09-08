@@ -25,9 +25,9 @@ calibration_sample_count: 16
 calibration_sequence_length: 512
 calibration_sha256: null
 calibration: data/calibration.txt
-awq_upstream_repo: ../llm-awq
-awq_upstream_repo_url: https://github.com/mit-han-lab/llm-awq.git
-awq_upstream_revision: d6e797a42b9ef7778de8ee2352116e0f48a78d61
+awq_code_repo: .cache/awq_drive_code
+awq_drive_url: https://drive.google.com/drive/folders/13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evgA
+awq_code_revision: google-drive-13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evgA
 queries: data/if_original_queries.jsonl
 normal_queries: data/if_original_matched_normal_queries.jsonl
 utility_corpus: data/heldout.txt

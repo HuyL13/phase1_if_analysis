@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the official MIT Han Lab AWQ code and export dense HF weights."""
+"""Run the configured AWQ code and export dense HF weights."""
 from __future__ import annotations
 
 import argparse
@@ -147,7 +147,7 @@ def main() -> None:
 
     awq_repo = Path(args.awq_repo).resolve()
     if not (awq_repo/'awq'/'quantize'/'pre_quant.py').is_file():
-        raise FileNotFoundError(f'Official AWQ checkout is incomplete: {awq_repo}')
+        raise FileNotFoundError(f'AWQ code checkout is incomplete: {awq_repo}')
     install_awq_kernel_stub()
     sys.path.insert(0, str(awq_repo))
 
@@ -193,8 +193,8 @@ def main() -> None:
         'backend': 'awq',
         'bits': args.bits,
         'group_size': args.group_size,
-        'upstream': 'mit-han-lab/llm-awq',
-        'upstream_sha': 'd6e797a42b9ef7778de8ee2352116e0f48a78d61',
+        'upstream': 'google-drive-awq-code',
+        'upstream_sha': '13cWrwAbZEiPJe9v4Hpr6fkRHICVL1evgA',
         'dense_quantized_weights': True,
     }
     (output/'quantization_manifest.json').write_text(

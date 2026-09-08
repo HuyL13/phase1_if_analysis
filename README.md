@@ -66,7 +66,7 @@ def verify(*, model, tokenizer, queries, generation, settings, seed):
 
 RTN thực thi groupwise theo hàng, nhóm dọc chiều input của matrix, xử lý nhóm cuối ngắn. Symmetric: mã `[-(2^(b-1)-1), +(2^(b-1)-1)]`, scale=maxabs/qmax, không zero-point. Asymmetric: mã `[0, 2^b-1]`, range bao gồm 0, zero-point làm tròn. `numpy.rint` dùng ties-to-even. Đây là RTN fake quantization với trọng số dequantized; không phải kernel inference packed và có thể khác RTN backend ban đầu của bạn. Để tái lập quan sát 1.00/0.75, trước tiên đối chiếu quy ước RTN và Stage 0. Không mặc định coi các con số tham chiếu là kết quả.
 
-AWQ3 dùng **checkpoint đã lượng tử hóa bởi backend upstream**, xuất về HF dequantized **trong cùng hệ tọa độ parameter** của model gốc. Repo không gọi RTN rồi gắn nhãn AWQ. Packed `qweight/qzeros` bị từ chối. Phải hoàn nguyên mọi reparameterization/scaling/fusion để `Q(W_F)-Q(W)` có ý nghĩa; chỉ unpack integer codes là chưa đủ. Bảo toàn tokenizer, architecture, module grouping và dùng cùng calibration token data cho clean/IF ở cùng seed.
+AWQ3 dùng **checkpoint đã lượng tử hóa bởi code AWQ lấy từ Google Drive cấu hình trong `configs/common.yaml`**, xuất về HF dequantized **trong cùng hệ tọa độ parameter** của model gốc. Repo không gọi RTN rồi gắn nhãn AWQ. Packed `qweight/qzeros` bị từ chối. Phải hoàn nguyên mọi reparameterization/scaling/fusion để `Q(W_F)-Q(W)` có ý nghĩa; chỉ unpack integer codes là chưa đủ. Bảo toàn tokenizer, architecture, module grouping và dùng cùng calibration token data cho clean/IF ở cùng seed.
 
 Mỗi thư mục checkpoint AWQ phải có `metadata.json`:
 
@@ -95,7 +95,7 @@ bash run_full.sh
 
 Script chỉ dùng Python của environment server hiện tại và không tự cài package, không tạo `.venv`. Cài dependencies một lần bằng `python -m pip install -r requirements.txt`, sau đó chạy FP, RTN3, RTN4 và AWQ3, Stage 0 → Batch A → Batch B → CSV/biểu đồ/report. Có thể chọn Python bằng `PYTHON=/path/to/python bash run_full.sh`. Kết quả tổng hợp nằm trong `outputs/original_if/summary/` theo cấu hình mặc định. Chạy `bash run_full.sh --help` để xem tùy chọn.
 
-Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries upstream, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, tự clone official `mit-han-lab/llm-awq` nếu thiếu, sau đó tạo AWQ3 cho clean/fingerprinted theo từng seed bằng API AWQ upstream, kiểm tra manifest và ghi provenance sidecar. Không còn phụ thuộc repo wrapper trung gian. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
+Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries gốc, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, tải code AWQ từ Google Drive nếu thiếu, sau đó tạo AWQ3 cho clean/fingerprinted theo từng seed bằng code AWQ đó, kiểm tra manifest và ghi provenance sidecar. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
 
 ```bash
 # Stage 0 + Batch A, đúng thứ tự trên tất cả config:

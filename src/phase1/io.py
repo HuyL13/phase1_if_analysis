@@ -20,7 +20,7 @@ COMMON_KEYS = ('model', 'clean_checkpoint', 'fingerprinted_checkpoint', 'tokeniz
                'tokenizer_revision', 'generation', 'verification', 'queries', 'normal_queries',
                'utility_corpus', 'ppl_sequence_length', 'module_pattern', 'block_pattern',
                'dtype', 'seeds', 'device', 'prompt_mode', 'max_prompt_length',
-               'calibration', 'awq_upstream_repo', 'ppl_datasets', 'ppl_cache_dir')
+               'calibration', 'awq_code_repo', 'awq_code_revision', 'ppl_datasets', 'ppl_cache_dir')
 
 
 def digest(path):
