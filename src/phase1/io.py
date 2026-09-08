@@ -80,13 +80,24 @@ def load_config(path):
     return c
 
 
+def same_checkpoint_reference(left, right):
+    if left == right:
+        return True
+    if left is None or right is None:
+        return False
+    try:
+        return Path(left).expanduser().resolve() == Path(right).expanduser().resolve()
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return False
+
+
 def validate_quantized_metadata(config, metadata, source, seed):
     for key in QUANT_KEYS:
         if key not in metadata or metadata[key] != config.get(key):
             raise ValueError(f'Quantized checkpoint metadata mismatch: {key}')
     if metadata.get('seed') != seed:
         raise ValueError('Quantized checkpoint metadata mismatch: seed')
-    if metadata.get('source_checkpoint') != source:
+    if not same_checkpoint_reference(metadata.get('source_checkpoint'), source):
         raise ValueError('Quantized checkpoint source_checkpoint does not match source')
     if metadata.get('storage_representation') != 'hf_dequantized':
         raise ValueError('Export quantized weights into the original HF parameter coordinates first')

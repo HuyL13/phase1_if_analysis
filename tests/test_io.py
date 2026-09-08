@@ -31,3 +31,16 @@ def test_quantizer_metadata_mismatch_rejected():
             'storage_representation': 'hf_dequantized', 'quantization_library_version': 'test'}
     with pytest.raises(ValueError, match='bits'):
         validate_quantized_metadata(cfg, meta, 'clean', 42)
+
+
+def test_quantized_metadata_accepts_relative_and_absolute_same_checkpoint(tmp_path, monkeypatch):
+    checkpoint = tmp_path / 'checkpoints' / 'clean'
+    checkpoint.mkdir(parents=True)
+    monkeypatch.chdir(tmp_path)
+    cfg = dict(quantizer='rtn', bits=3, group_size=128, symmetric=True, zero_point=False,
+               calibration_dataset=None, calibration_sample_count=0,
+               calibration_sequence_length=0, calibration_sha256=None)
+    meta = {**cfg, 'seed': 42, 'source_checkpoint': str(checkpoint.resolve()),
+            'storage_representation': 'hf_dequantized',
+            'quantization_library_version': 'phase1-rtn-export@phase1.rtn.v1'}
+    validate_quantized_metadata(cfg, meta, 'checkpoints/clean', 42)
