@@ -1,3 +1,9 @@
 extends: common.yaml
 quantizer: rtn
 bits: 4
+calibration_dataset: null
+calibration_sample_count: 0
+calibration_sequence_length: 0
+calibration_sha256: null
+quantized_clean_checkpoint: checkpoints/rtn4/seed{seed}/clean
+quantized_fingerprinted_checkpoint: checkpoints/rtn4/seed{seed}/fingerprinted

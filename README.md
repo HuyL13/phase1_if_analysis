@@ -97,6 +97,8 @@ Script chỉ dùng Python của environment server hiện tại và không tự 
 
 Trước khi chạy batch, script tải checkpoint base và IF-SFT, tải IF queries gốc, tạo matched-normal controls từ public Alpaca theo token-length tolerance, tạo calibration từ Wikitext-2 train, sau đó chuẩn bị AWQ3 cho clean/fingerprinted bằng code vendored trong repo. AWQ là artifact cache: nếu checkpoint, manifest và metadata đã đủ thì lần sau chỉ reuse/load ra phân tích, không gọi quantize lại. Sau đó script preflight checkpoint, dữ liệu query, verifier IF và metadata. Có thể chạy riêng validation bằng `phase1 validate --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml`.
 
+RTN3, RTN4 v? AWQ3 ??u ???c chu?n b? th?nh checkpoint HF dequantized tr??c batch. L?n ch?y sau n?u `checkpoint + quantization_manifest.json + metadata.json` c?n kh?p config/source/seed th? `run_full.sh` ch? reuse; baseline, margin, drift v? parameter error ??u ??c l?i artifact n?y. Stage 2 v?n t?nh RTN grid ?? ?o resolution, v? Experiment 4 v?n can thi?p t?ng layer RTN3 v? ?? l? b?n ch?t th? nghi?m layer sensitivity.
+
 ```bash
 # Stage 0 + Batch A, đúng thứ tự trên tất cả config:
 phase1 batch --configs configs/fp.yaml configs/rtn3.yaml configs/rtn4.yaml configs/awq3.yaml

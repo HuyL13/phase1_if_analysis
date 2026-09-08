@@ -5,11 +5,12 @@ from pathlib import Path
 import sys
 import numpy as np
 import yaml
-from .io import load_config, run_metadata, write_json, validate_config_inputs
+from .io import load_config, run_metadata, write_json, validate_config_inputs, QUANT_KEYS
 from .experiments import (baseline, parameter_analysis, layer_sensitivity, query_margins,
                           representation_drift, Runtime)
 from .reporting import integrate, validate_comparison
 from .runtime import quantized_checkpoint
+from .quantization import rtn
 
 
 def run_root(config, seed):
@@ -26,7 +27,7 @@ def execute(config, seed, stages, rtn3_results=None):
         if old['run_id'] != metadata['run_id']:
             raise ValueError('Existing output belongs to different inputs/config/code; choose a new output_root')
         metadata = old
-    if config['quantizer'] == 'awq':
+    if config['quantizer'] != 'fp':
         exports = {variant: quantized_checkpoint(config, variant, seed)[1]
                    for variant in ('clean', 'fingerprinted')}
         metadata['quantized_checkpoint_metadata'] = exports
@@ -85,13 +86,40 @@ def smoke(output):
             fp[name] = clean[name]+rng.normal(scale=.01*(layer+1),size=(8,17)).astype(np.float32)
     np.savez(output/'clean.npz', **clean)
     np.savez(output/'fingerprinted.npz', **fp)
+    def export_rtn_fixture(source, dest, cfg, seed):
+        source = Path(source)
+        dest = Path(dest)
+        arrays = np.load(source, allow_pickle=False)
+        try:
+            quantized = {}
+            for name in arrays.files:
+                value = arrays[name]
+                if value.ndim == 2:
+                    quantized[name] = rtn(value, cfg['bits'], cfg['group_size'], cfg['symmetric']).values.astype(value.dtype)
+                else:
+                    quantized[name] = value
+            np.savez(dest, **quantized)
+        finally:
+            arrays.close()
+        sidecar = {key: cfg.get(key) for key in QUANT_KEYS}
+        sidecar.update(seed=seed, source_checkpoint=str(source), storage_representation='hf_dequantized',
+                       quantization_library_version='phase1-rtn-export@phase1.rtn.v1')
+        write_json(dest.with_suffix(dest.suffix + '.metadata.json'), sidecar)
+
     for bits in (3,4):
         path = output/f'rtn{bits}.yaml'
-        path.write_text(yaml.safe_dump(dict(model='SYNTHETIC_SMOKE', synthetic=True,
+        cfg = dict(model='SYNTHETIC_SMOKE', synthetic=True,
             clean_checkpoint=str(output/'clean.npz'), fingerprinted_checkpoint=str(output/'fingerprinted.npz'),
             tokenizer='not_used_in_parameter_smoke', quantizer='rtn', bits=bits, group_size=8,
-            seeds=[42], output_root=str(output/'outputs'))), encoding='utf-8')
-        execute(load_config(path),42,[1,2,3])
+            calibration_dataset=None, calibration_sample_count=0, calibration_sequence_length=0, calibration_sha256=None,
+            quantized_clean_checkpoint=str(output/f'rtn{bits}_clean.npz'),
+            quantized_fingerprinted_checkpoint=str(output/f'rtn{bits}_fingerprinted.npz'),
+            seeds=[42], output_root=str(output/'outputs'))
+        path.write_text(yaml.safe_dump(cfg), encoding='utf-8')
+        loaded = load_config(path)
+        export_rtn_fixture(loaded['clean_checkpoint'], loaded['quantized_clean_checkpoint'], loaded, 42)
+        export_rtn_fixture(loaded['fingerprinted_checkpoint'], loaded['quantized_fingerprinted_checkpoint'], loaded, 42)
+        execute(loaded,42,[1,2,3])
     integrate(output/'outputs')
     print(f'Synthetic smoke report: {output / "outputs/summary/phase1_summary.md"}', flush=True)
 

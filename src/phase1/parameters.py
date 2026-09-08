@@ -27,7 +27,7 @@ def parameter_analysis(c, seed, root, metadata, experiments=(1, 2, 3)):
     fp = WeightStore(c['fingerprinted_checkpoint'], clean.names)
     stores = [clean, fp]
     quant_clean = quant_fp = None
-    if c['quantizer'] == 'awq':
+    if c['quantizer'] != 'fp':
         qc, mc = quantized_checkpoint(c, 'clean', seed)
         qf, mf = quantized_checkpoint(c, 'fingerprinted', seed)
         quant_clean, quant_fp = WeightStore(qc, clean.names), WeightStore(qf, fp.names)
@@ -57,6 +57,11 @@ def parameter_analysis(c, seed, root, metadata, experiments=(1, 2, 3)):
                 if qw is None or qwf is None:
                     raise ValueError('Quantized export contains non-floating parameter: '+name)
                 qw, qwf = effective_precision(qw, c['dtype']), effective_precision(qwf, c['dtype'])
+                if c['quantizer'] == 'rtn' and selected and 2 in experiments:
+                    grid = rtn(w, c['bits'], c['group_size'], c['symmetric'])
+                    gridf = rtn(wf, c['bits'], c['group_size'], c['symmetric'])
+                    grid.values = qw
+                    gridf.values = qwf
             elif c['quantizer'] == 'rtn' and selected:
                 grid = rtn(w, c['bits'], c['group_size'], c['symmetric'])
                 gridf = rtn(wf, c['bits'], c['group_size'], c['symmetric'])

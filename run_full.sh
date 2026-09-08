@@ -45,16 +45,16 @@ fi
 
 printf 'Validating checkpoints, data, verifier and quantized exports...\n'
 "$PYTHON_BIN" scripts/00_download_checkpoints.py --config "${CONFIGS[0]}"
-UPSTREAM_CONFIGS=()
+QUANTIZED_CONFIGS=()
 for config in "${CONFIGS[@]}"; do
     case "$config" in
-        *awq*.yaml) UPSTREAM_CONFIGS+=("$config") ;;
+        *rtn*.yaml|*awq*.yaml) QUANTIZED_CONFIGS+=("$config") ;;
     esac
 done
-if (( ${#UPSTREAM_CONFIGS[@]} > 0 )); then
+if (( ${#QUANTIZED_CONFIGS[@]} > 0 )); then
     "$PYTHON_BIN" scripts/09_prepare_upstream_quantized.py \
         --python "$PYTHON_BIN" \
-        --configs "${UPSTREAM_CONFIGS[@]}"
+        --configs "${QUANTIZED_CONFIGS[@]}"
 fi
 "$PYTHON_BIN" -u -m phase1.cli validate --configs "${CONFIGS[@]}"
 

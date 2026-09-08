@@ -1,8 +1,11 @@
 """Real tiny local HF models; synthetic verifier is only a test fixture."""
 import csv
+import importlib.util
 import json
+from pathlib import Path
 import numpy as np
 import pytest
+import sys
 import yaml
 torch = pytest.importorskip('torch')
 transformers = pytest.importorskip('transformers')
@@ -64,9 +67,21 @@ def test_all_stages_run_on_real_tiny_hf_models(tmp_path):
             ppl_sequence_length=8,ppl_datasets=None,max_prompt_length=16,top_layers=1,
             generation={'max_new_tokens':1,'do_sample':False,'pad_token_id':1},
             verification={'callable':'test_hf_integration:synthetic_verifier','settings':{}})
+        if q == 'rtn':
+            config.update(calibration_dataset=None, calibration_sample_count=0, calibration_sequence_length=0,
+                          calibration_sha256=None,
+                          quantized_clean_checkpoint=str(tmp_path/f'{q}{b}/clean'),
+                          quantized_fingerprinted_checkpoint=str(tmp_path/f'{q}{b}/fingerprinted'))
         path=tmp_path/f'{q}{b}.yaml'
         path.write_text(yaml.safe_dump(config))
         configs.append(str(path))
+        if q == 'rtn':
+            prepare_path = Path(__file__).resolve().parents[1] / 'scripts' / '09_prepare_upstream_quantized.py'
+            spec = importlib.util.spec_from_file_location('prepare_quantized', prepare_path)
+            module = importlib.util.module_from_spec(spec)
+            assert spec.loader is not None
+            spec.loader.exec_module(module)
+            module.prepare(str(path), sys.executable)
     main(['batch','--configs',*configs,'--include-batch-b'])
     dest=tmp_path/'outputs/summary'
     for name in ['baseline_results.csv','if_query_results.csv','update_retention.csv','update_resolution.csv',

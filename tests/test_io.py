@@ -24,7 +24,7 @@ def test_awq_can_run_single_deterministic_seed(tmp_path):
 
 
 def test_quantizer_metadata_mismatch_rejected():
-    cfg = dict(quantizer='gptq', bits=3, group_size=128, symmetric=True, zero_point=False,
+    cfg = dict(quantizer='rtn', bits=3, group_size=128, symmetric=True, zero_point=False,
                calibration_dataset='public', calibration_sample_count=128,
                calibration_sequence_length=2048, calibration_sha256='same')
     meta = {**cfg, 'bits': 4, 'seed': 42, 'source_checkpoint': 'clean',

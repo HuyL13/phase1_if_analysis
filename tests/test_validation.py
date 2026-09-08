@@ -2,7 +2,7 @@ import json
 import yaml
 import pytest
 
-from phase1.io import load_config, validate_config_inputs
+from phase1.io import load_config, validate_config_inputs, QUANT_KEYS, write_json
 
 
 def test_validation_rejects_placeholder_inputs(tmp_path):
@@ -28,10 +28,21 @@ def test_validation_accepts_complete_rtn_inputs(tmp_path):
                                   'language': 'en', 'structure': 'instruction'})+'\n', encoding='utf-8')
     corpus = tmp_path/'heldout.txt'
     corpus.write_text('text', encoding='utf-8')
+    qclean = tmp_path/'qclean.npz'
+    qfp = tmp_path/'qfingerprinted.npz'
+    qclean.write_bytes(b'npz')
+    qfp.write_bytes(b'npz')
     config = dict(model='model', clean_checkpoint=str(clean), fingerprinted_checkpoint=str(fp),
                   tokenizer='tokenizer', queries=str(queries), normal_queries=str(normal),
                   utility_corpus=str(corpus), verification={'callable': 'json:loads'},
-                  quantizer='rtn', bits=3)
+                  quantizer='rtn', bits=3, group_size=128, symmetric=True, zero_point=False,
+                  calibration_dataset=None, calibration_sample_count=0, calibration_sequence_length=0, calibration_sha256=None,
+                  quantized_clean_checkpoint=str(qclean), quantized_fingerprinted_checkpoint=str(qfp))
+    for path_, source in ((qclean, clean), (qfp, fp)):
+        sidecar = {key: config.get(key) for key in QUANT_KEYS}
+        sidecar.update(seed=42, source_checkpoint=str(source), storage_representation='hf_dequantized',
+                       quantization_library_version='phase1-rtn-export@phase1.rtn.v1')
+        write_json(path_.with_suffix(path_.suffix + '.metadata.json'), sidecar)
     path = tmp_path/'config.yaml'
     path.write_text(yaml.safe_dump(config), encoding='utf-8')
     assert validate_config_inputs(load_config(path)) is True

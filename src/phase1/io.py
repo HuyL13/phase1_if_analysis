@@ -92,7 +92,7 @@ def validate_quantized_metadata(config, metadata, source, seed):
         raise ValueError('Export quantized weights into the original HF parameter coordinates first')
     if not metadata.get('quantization_library_version'):
         raise ValueError('Quantization library version must be recorded')
-    if not config.get('calibration_sha256'):
+    if config.get('quantizer') == 'awq' and not config.get('calibration_sha256'):
         raise ValueError('AWQ requires the hash of the exact calibration token data')
 
 
@@ -170,16 +170,25 @@ def validate_config_inputs(c):
     except (ImportError, AttributeError, TypeError, ValueError) as exc:
         errors.append(f'verification.callable is not importable: {exc}')
 
-    if c['quantizer'] == 'awq':
+    if c['quantizer'] != 'fp':
         for seed in c['seeds']:
             for variant in ('clean', 'fingerprinted'):
                 key = 'quantized_clean_checkpoint' if variant == 'clean' else 'quantized_fingerprinted_checkpoint'
                 value = c.get(key)
                 path = Path(str(value).format(seed=seed)) if value else None
-                if path is None or not path.is_dir():
-                    errors.append(f'{key} seed {seed} must be an existing directory: {value}')
+                if path is None or not path.exists():
+                    errors.append(f'{key} seed {seed} does not exist: {value}')
                     continue
-                sidecar = path/'metadata.json'
+                if path.is_dir():
+                    if not ((path/'config.json').is_file() and ((path/'model.safetensors').is_file() or (path/'model.safetensors.index.json').is_file() or any(path.glob('*.safetensors')))):
+                        errors.append(f'{key} seed {seed} is not a dequantized HF checkpoint directory: {value}')
+                        continue
+                    sidecar = path/'metadata.json'
+                elif path.suffix == '.npz':
+                    sidecar = path.with_suffix(path.suffix + '.metadata.json')
+                else:
+                    errors.append(f'{key} seed {seed} must be an HF checkpoint directory or NPZ fixture: {value}')
+                    continue
                 if not sidecar.is_file():
                     errors.append(f'missing quantization metadata: {sidecar}')
                     continue

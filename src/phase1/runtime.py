@@ -115,7 +115,8 @@ def quantized_checkpoint(config, variant, seed):
     if not config.get(key):
         raise ValueError(f'Set {key} to a dequantized HF checkpoint path (supports {{seed}})')
     path = Path(str(config[key]).format(seed=seed))
-    metadata = json.loads((path/'metadata.json').read_text(encoding='utf-8'))
+    metadata_path = path.with_suffix(path.suffix + '.metadata.json') if path.is_file() else path / 'metadata.json'
+    metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
     source = config['clean_checkpoint' if variant == 'clean' else 'fingerprinted_checkpoint']
     validate_quantized_metadata(config, metadata, source, seed)
     return str(path), metadata
@@ -148,7 +149,7 @@ class Runtime:
         c = self.config
         checkpoint = c['clean_checkpoint' if variant == 'clean' else 'fingerprinted_checkpoint']
         quantizer = 'fp' if fp else c['quantizer']
-        if quantizer == 'awq':
+        if quantizer != 'fp':
             checkpoint, _ = quantized_checkpoint(c, variant, self.seed)
         dtype = getattr(torch, c['dtype'])
         model = AutoModelForCausalLM.from_pretrained(checkpoint, torch_dtype=dtype,
@@ -157,16 +158,6 @@ class Runtime:
         try:
             if getattr(model.config, 'quantization_config', None):
                 raise ValueError('Packed quantized checkpoints are unsupported; provide dequantized HF export')
-            if quantizer == 'rtn':
-                names = selected_parameters(model, c)
-                if not names:
-                    raise ValueError('module_pattern did not select any quantizable parameters')
-                # Whole-model RTN: no original copy, model is discarded at exit.
-                with torch.no_grad():
-                    for name, p in model.named_parameters():
-                        if name in names:
-                            grid = rtn(p.detach().float().cpu().numpy(), c['bits'], c['group_size'], c['symmetric'])
-                            p.copy_(torch.as_tensor(grid.values, dtype=p.dtype, device=p.device))
             yield model
         finally:
             del model
